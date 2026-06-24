@@ -10,6 +10,7 @@ import { readZip } from './parser/zip.js';
 import { extractRichLinesFromPdf } from './parser/pdf-text.js';
 import { parseQuestions } from './parser/questions.js';
 import { parseDocxBuffer } from './parser/docx-questions.js';
+import { parseTextPack } from './parser/text-pack.js';
 import { saveState, savePdfBytes, clearSavedPdfBytes } from './game/persistence.js';
 
 export async function parsePdf(arrayBuffer, filename) {
@@ -111,20 +112,24 @@ export async function handleZipUpload(file) {
   await processZipBuffer(await file.arrayBuffer());
 }
 
-export async function parseDocx(arrayBuffer, filename) {
+// Shared post-parse handler for the non-PDF upload paths (.docx, .txt).
+// Writes the result into state, updates the status message, and saves on
+// success. `errorPrefix` is the label used if `parseFn()` throws.
+async function applyTextPackResult({ filename, parseFn, parsingMessage, errorPrefix }) {
   const statusEl = document.getElementById('pdf-status');
   if (statusEl) {
-    statusEl.textContent = 'Parsing Word document...';
+    statusEl.textContent = parsingMessage;
     statusEl.className = 'pdf-status';
   }
   state.packName = filename || null;
-  // No PDF to drive the inline viewer for a .docx-sourced pack — clear any
-  // stale bytes from a previous PDF upload so the viewer hides itself.
+  // No PDF backs this pack — clear any prior bytes so the inline viewer
+  // doesn't try to render a stale doc from a previous session, and clear
+  // the persisted copy so a reload doesn't resurrect it.
   state.pdfBytes = null;
   if (state.pdfViewer) state.pdfViewer.doc = null;
   clearSavedPdfBytes();
   try {
-    const questions = await parseDocxBuffer(arrayBuffer);
+    const questions = await parseFn();
     const totalSlots = questions.reduce((sum, q) => {
       if (q.streakRange) return sum + (q.streakRange.end - q.streakRange.start + 1);
       return sum + 1;
@@ -143,16 +148,34 @@ export async function parseDocx(arrayBuffer, filename) {
       state.questions = [];
       state.hasQuestions = false;
       if (statusEl) {
-        statusEl.textContent = `Could not parse questions from "${filename}" (found ${questions.length}). Will use numbered tracking.`;
+        statusEl.textContent = `Could not parse questions from "${filename}" (found ${questions.length}).`;
         statusEl.className = 'pdf-status warn';
       }
     }
   } catch (err) {
     if (statusEl) {
-      statusEl.textContent = 'Error parsing .docx: ' + err.message;
+      statusEl.textContent = `${errorPrefix}: ${err.message}`;
       statusEl.className = 'pdf-status error';
     }
     state.questions = [];
     state.hasQuestions = false;
   }
+}
+
+export async function parseDocx(arrayBuffer, filename) {
+  await applyTextPackResult({
+    filename,
+    parseFn: () => parseDocxBuffer(arrayBuffer),
+    parsingMessage: 'Parsing Word document...',
+    errorPrefix: 'Error parsing .docx',
+  });
+}
+
+export async function parseTextFile(text, filename) {
+  await applyTextPackResult({
+    filename,
+    parseFn: () => parseTextPack(text),
+    parsingMessage: 'Parsing text pack...',
+    errorPrefix: 'Error parsing text pack',
+  });
 }

@@ -35,8 +35,8 @@
     <h2>Upload Packet</h2>
     <div class="pdf-upload">
       <label class="file-label" for="pdf-input">Choose pack</label>
-      <input type="file" id="pdf-input" accept=".pdf,.zip,.docx">
-      <span class="pdf-status" id="pdf-status">No file selected. Accepts .pdf, .zip of packs, or .docx.</span>
+      <input type="file" id="pdf-input" accept=".pdf,.zip,.docx,.txt">
+      <span class="pdf-status" id="pdf-status">No file selected. Accepts .pdf, .zip of PDFs, .docx, or .txt.</span>
     </div>
     <div id="zip-pack-select" style="display:none; margin-top: 12px;">
       <label style="font-weight:600;">Select a pack:</label>
@@ -81,7 +81,37 @@
   <div style="text-align:center; margin-top: 12px;">
     <button type="button" class="browse-toggle" data-action="start-tutorial" title="Boot a sandbox game with preset rosters and a sample pack so you can try the controls">Tutorial</button>
     <a class="browse-toggle stats-link" href="tournaments/" title="Browse stats for every tournament hosted on this site">Tournament Stats →</a>
+    <button type="button" class="browse-toggle" data-action="open-format-pack" title="Convert your own raw questions into a scorekeeper-ready pack via an LLM">Format pack</button>
     <button type="button" class="browse-toggle" data-action="clear-and-reload">Clear saved game</button>
+  </div>
+</div>
+
+<!-- ==================== FORMAT PACK MODAL ==================== -->
+<div class="format-modal" id="format-modal" role="dialog" aria-modal="true" aria-labelledby="format-modal-title">
+  <div class="format-modal-card">
+    <button class="format-modal-close" data-action="close-format-pack" title="Close" aria-label="Close">&times;</button>
+    <h2 id="format-modal-title">Format your own pack</h2>
+    <p class="format-modal-help">
+      Paste raw questions in <strong>Step 1</strong> and click <em>Copy LLM prompt</em>. Send that to
+      Claude / ChatGPT / etc. — it will return a reformatted pack. Paste the LLM's output into
+      <strong>Step 2</strong> and click <em>Load pack</em>.
+    </p>
+
+    <label class="format-modal-label" for="format-raw">Step 1 — Raw questions</label>
+    <textarea id="format-raw" class="format-modal-textarea" rows="8"
+              placeholder="Paste raw quiz pack (any format) here..."></textarea>
+    <div class="format-modal-actions">
+      <button type="button" class="btn" data-action="copy-format-prompt">Copy LLM prompt</button>
+      <span class="format-modal-status" id="format-copy-status"></span>
+    </div>
+
+    <label class="format-modal-label" for="format-output">Step 2 — LLM's formatted output</label>
+    <textarea id="format-output" class="format-modal-textarea" rows="8"
+              placeholder="Paste the LLM's reformatted output here..."></textarea>
+    <div class="format-modal-actions">
+      <button type="button" class="btn btn-start" data-action="load-format-pack">Load pack</button>
+      <span class="format-modal-status" id="format-load-status"></span>
+    </div>
   </div>
 </div>
 

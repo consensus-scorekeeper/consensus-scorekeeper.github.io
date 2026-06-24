@@ -8,8 +8,8 @@ Two root pages and one folder-per-tournament under `tournaments/`. All
 share `styles/main.css` and the contents of `src/`:
 
 - `index.html` → the live scorekeeper. Boots the scoring UI, parses the
-  uploaded packet (`.pdf`, `.zip` of PDFs, or `.docx`), drives all the
-  in-game features.
+  uploaded packet (`.pdf`, `.zip` of PDFs, `.docx`, or `.txt`), drives all
+  the in-game features.
 - `stats.html` → legacy redirect notice. Old bookmarks land here and
   meta-refresh to `tournaments/` after a few seconds.
 - `tournaments/index.html` → the **public stats hub**. Lists every
@@ -52,13 +52,14 @@ src/
                           stamps title from TOURNAMENTS[slug], loads results/manifest.json
   tournaments-main.js   ← tournaments/index.html entry: hub list + search filter
   state.js              ← state singleton + reducers + subscribe()
-  loader.js             ← parsePdf / parseDocx / processZipBuffer / handleZipUpload orchestrators
+  loader.js             ← parsePdf / parseDocx / parseTextFile / processZipBuffer / handleZipUpload orchestrators (.docx + .txt share an applyTextPackResult helper)
   parser/
     zip.js              ← readZip (optional accept(name) filter), looksLikePdfOrZip
     pdf-text.js         ← extractRichLinesFromPdf (pdf.js → lines/segments/posMap)
     questions.js        ← parseQuestions + cleanTrailing + extractRichRange + richToHtml
     docx-text.js        ← extractDocxParagraphs (zip → word/document.xml → runs[])
     docx-questions.js   ← parseDocxBuffer + inferStreakSlotCount (JS port of scripts/parse_consensus_docx.py)
+    text-pack.js        ← parseTextPack: normalize a plain-text pack into the rich-segment shape parseQuestions consumes
   game/
     streaks.js          ← rebuildStreakGroups
     jailbreak.js        ← rebuildJailbreakLocks
@@ -80,6 +81,9 @@ src/
     tutorial.js         ← startTutorialGame: boots a sandbox session w/ preset rosters + pack
     tutorial-overlay.js ← 13-step coach-marks overlay engine (multi-target highlight)
     tournament-stats.js ← setupTournamentStats: manifest fetch + view router
+    format-pack.js      ← "Format your own pack" modal: fills assets/text-pack-llm-prompt.txt
+                          with user-pasted raw questions, copies prompt to clipboard, then
+                          loads the LLM's reformatted output via parseTextFile
   util/
     escape.js           ← escapeHtml, csvEscape
     csv.js              ← buildResultsCsv, buildResultsFilename (used by exportCsv)
@@ -159,9 +163,9 @@ sections can show/hide themselves without JS coordination.
 `loadState`, `tutorial.js`, and the toggle itself use to display a name
 in whichever element is currently mounted.
 
-## Packet upload — `.pdf` vs `.docx`
+## Packet upload — `.pdf` vs `.zip` vs `.docx` vs `.txt`
 
-The file picker (`#pdf-input`, `accept=".pdf,.zip,.docx"`) dispatches
+The file picker (`#pdf-input`, `accept=".pdf,.zip,.docx,.txt"`) dispatches
 in `src/main.js` by extension:
 
 - **`.pdf`** → `parsePdf` (`loader.js`). pdf.js extracts rich text with
@@ -175,13 +179,23 @@ in `src/main.js` by extension:
   reads `word/document.xml` out of the docx (which is itself a zip) and
   yields `[{ text, bold }]` runs; `parseDocxBuffer` runs the same state
   machine as `scripts/parse_consensus_docx.py` and emits questions in
-  the PDF-parser's shape (`answerHtml`, `streakRange`,
-  `categoryInstructions`, `pageNum: null`, `yPos: null`). `state.pdfBytes`
-  is cleared and `clearSavedPdfBytes()` runs, so the inline viewer hides
-  itself for `.docx`-sourced packs.
+  the PDF-parser's shape.
+- **`.txt`** → `parseTextFile` (`loader.js`). `parseTextPack` normalizes
+  the text into a synthetic line-list with bold flags and feeds it to
+  the PDF parser's `parseQuestions`, so the same propagation /
+  streakRange logic applies. The "Format pack" modal
+  (`ui/format-pack.js`) lets users generate this format from raw input
+  via an LLM prompt fetched from `assets/text-pack-llm-prompt.txt`.
 
-The PDF parser and the docx parser produce identical-shape question
-records, so everything downstream (`padQuestionsToSlots`, `startGame`,
+`parseDocx` and `parseTextFile` share an `applyTextPackResult({
+filename, parseFn, parsingMessage, errorPrefix })` helper that handles
+the post-parse work (slot count, status message, persistence). Both
+clear `state.pdfBytes` and call `clearSavedPdfBytes()` so the inline
+viewer hides itself for non-PDF packs and a reload doesn't resurrect a
+stale PDF.
+
+All four upload paths produce identical-shape question records, so
+everything downstream (`padQuestionsToSlots`, `startGame`,
 `rebuildStreakGroups`, scoring, CSV export) doesn't know or care which
 upload path produced them.
 

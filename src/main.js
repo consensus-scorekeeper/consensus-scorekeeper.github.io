@@ -28,7 +28,7 @@ import { rebuildStreakGroups } from './game/streaks.js';
 import { getInitials, getAnsweredBy, getSplitPair, getCategoryRunSize } from './game/categories.js';
 import { STORAGE_KEY, PDF_STORAGE_KEY, isGameVisible, saveState, savePdfBytes, loadPdfBytes, clearSavedState } from './game/persistence.js';
 import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameField, toggleRosterMode } from './ui/setup.js';
-import { parsePdf, parseDocx, processZipBuffer, handleZipUpload } from './loader.js';
+import { parsePdf, parseDocx, parseTextFile, processZipBuffer, handleZipUpload } from './loader.js';
 import { readZip, looksLikePdfOrZip } from './parser/zip.js';
 import { extractRichLinesFromPdf } from './parser/pdf-text.js';
 import { SECTION_WORDS, STRUCTURAL_RE, cleanTrailing, extractRichRange, richToHtml, parseQuestions } from './parser/questions.js';
@@ -67,6 +67,7 @@ import {
 import { pushScoreboardUpdate, popOutScoreboard } from './ui/scoreboard-popout.js';
 import { setupPackBrowser } from './ui/pack-browser.js';
 import { startTutorialGame } from './ui/tutorial.js';
+import { setupFormatPack, formatPackActions } from './ui/format-pack.js';
 
 // ==================== UI INIT ====================
 setupSetupScreen();
@@ -76,9 +77,10 @@ setupKeybinds({ nextQuestion: () => nextQuestion(), prevQuestion: () => prevQues
 setupSplitters();
 setupPdfViewer();
 setupPackBrowser();
+setupFormatPack();
 
-// File picker on the setup screen — uploads a PDF, a zip-of-PDFs, or a .docx
-// packet (text-only; no inline PDF viewer for .docx-sourced packs).
+// File picker on the setup screen — uploads a PDF, a zip-of-PDFs, a .docx,
+// or a .txt pack. The non-PDF formats are text-only (no inline PDF viewer).
 document.getElementById('pdf-input').addEventListener('change', async (e) => {
   const file = e.target.files[0];
   if (!file) return;
@@ -87,6 +89,8 @@ document.getElementById('pdf-input').addEventListener('change', async (e) => {
     await handleZipUpload(file);
   } else if (lower.endsWith('.docx')) {
     await parseDocx(await file.arrayBuffer(), file.name);
+  } else if (lower.endsWith('.txt')) {
+    await parseTextFile(await file.text(), file.name);
   } else {
     await parsePdf(await file.arrayBuffer(), file.name);
   }
@@ -203,6 +207,7 @@ const ACTION_HANDLERS = {
   'export-csv': () => exportCsv(),
   'reparse-current-pdf': () => reparseCurrentPdf(),
   'back-to-setup': () => backToSetup(),
+  ...formatPackActions,
 };
 
 document.addEventListener('click', (e) => {

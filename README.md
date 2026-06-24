@@ -8,7 +8,7 @@ Scorekeeper and stats viewer for [Consensus](https://consensustrivia.com/) trivi
 
 The repo has four entry points.
 
-`index.html` is the scorekeeper. You upload a packet — `.pdf`, a `.zip` of PDFs, or a `.docx` — or pick one from the in-app browser of consensustrivia.com, set up rosters, and run the game. PDF packs get an inline PDF viewer for cross-checking; `.docx`-sourced packs are text-only (no viewer). Most of the live scoring is keyboard-driven. "Export CSV" at the end writes one row per player. There's also a Pop Out button that opens a dark, presentation-style scoreboard in a separate window for projecting to players or spectators.
+`index.html` is the scorekeeper. You upload a packet — `.pdf`, a `.zip` of PDFs, a `.docx`, or a plain-text `.txt` — or pick one from the in-app browser of consensustrivia.com, set up rosters, and run the game. PDF packs get an inline PDF viewer for cross-checking; the text-derived formats (`.docx`/`.txt`) are text-only (no viewer). A "Format pack" button on the setup screen helps you convert arbitrary raw questions into the `.txt` format by copying a prefilled LLM prompt to your clipboard. Most of the live scoring is keyboard-driven. "Export CSV" at the end writes one row per player. There's also a Pop Out button that opens a dark, presentation-style scoreboard in a separate window for projecting to players or spectators.
 
 ![Setup screen with "Tournament rosters" switched on. Team A has the Wookiee roster loaded; Team B's dropdown still says "Pick a team".](docs/screenshots/scorekeeper-setup.png)
 
@@ -67,7 +67,7 @@ npm install
 npm test
 ```
 
-About 130 tests via Vitest + happy-dom. They cover the PDF question parser, the `.docx` parser (including the streak-slot inference heuristic), the scoring reducers, the CSV export round-trip, the tournament aggregator, and a structural sweep over every CSV under `tournaments/*/results/`.
+About 150 tests via Vitest + happy-dom. They cover the PDF question parser, the `.docx` parser (including the streak-slot inference heuristic), the `.txt` pack parser, the scoring reducers, the CSV export round-trip, the tournament aggregator, and a structural sweep over every CSV under `tournaments/*/results/`.
 
 ## Internal notes
 
