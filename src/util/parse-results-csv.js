@@ -7,7 +7,7 @@
 //
 // Pure — no DOM, no IO. Tests live in tests/parse-results-csv.test.js.
 
-function splitCsvLine(line) {
+export function splitCsvLine(line) {
   // RFC 4180-ish split: respect double-quoted fields and "" escapes.
   const out = [];
   let cur = '';

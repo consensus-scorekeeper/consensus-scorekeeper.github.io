@@ -1,0 +1,44 @@
+# Public intake for tournament results. Submissions with the
+# results-submission label are picked up by
+# .github/workflows/process-submission.yml, which validates the CSV(s)
+# and opens a PR adding them to tournaments/<slug>/results/.
+name: Submit game results
+description: Publish exported scorekeeper CSV(s) to a tournament's public stats page.
+title: "Results submission"
+labels: [results-submission]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for scoring! Paste the CSV(s) you exported with the scorekeeper's
+        **Export CSV** button below — or drag the `.csv` files into the attachments box.
+
+        - **Several games at once is fine**: paste them back-to-back, or attach multiple files.
+        - **Corrections are fine too**: re-submitting a game (same packet, same two teams)
+          replaces the previously published version instead of duplicating it.
+
+        A bot checks the submission and replies here within a minute or two.
+  - type: input
+    id: tournament
+    attributes:
+      label: Tournament slug
+      description: The tournament's folder name in its stats-page URL, e.g. `tournaments/stanford-consensus-2026/`.
+      placeholder: stanford-consensus-2026
+    validations:
+      required: true
+  - type: textarea
+    id: csv
+    attributes:
+      label: Results CSV
+      description: Paste the contents of one or more exported CSV files (leave empty if attaching files below).
+      render: text
+  - type: textarea
+    id: attachments
+    attributes:
+      label: Attached files
+      description: Or drag-and-drop the exported `.csv` file(s) here instead of pasting.
+  - type: textarea
+    id: notes
+    attributes:
+      label: Notes
+      description: Anything the maintainer should know (optional).

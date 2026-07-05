@@ -89,6 +89,8 @@ src/
     tutorial.js         ← startTutorialGame: boots a sandbox session w/ preset rosters + pack
     tutorial-overlay.js ← 13-step coach-marks overlay engine (multi-target highlight)
     tournament-stats.js ← setupTournamentStats: manifest fetch + view router
+    submit-results.js   ← "Submit Results" button: opens the GitHub submit-results
+                          issue form prefilled with the current game's CSV
     format-pack.js      ← "Format your own pack" modal: fills assets/text-pack-llm-prompt.txt
                           with user-pasted raw questions, copies prompt to clipboard, then
                           loads the LLM's reformatted output via parseTextFile
@@ -99,6 +101,9 @@ src/
     tournament-aggregate.js ← aggregateTournament + gamesForTeam + gamesForPlayer
     roster-text.js      ← parseRosterText / serializeRosterText / slugifyName:
                           the plain-text roster format (pure, DOM-free)
+    submission.js       ← splitCsvBundle / gameIdentityKey / canonicalResultsFilename /
+                          planSubmissionWrites: pure logic behind the results-submission
+                          pipeline (consumed by scripts/process-submission.mjs)
 assets/
   tutorial-pack.pdf     ← bundled pack the tutorial sandbox loads
   text-pack-llm-prompt.txt ← LLM reformatting prompt the Format-pack modal fills in
@@ -110,8 +115,14 @@ scripts/                ← Python helpers; run from anywhere (paths use __file_
   update_manifests.py          ← rewrites manifest.json in every tournaments/*/results/ folder
   parse_consensus_docx.py      ← offline .docx → JSON/text dump; reference implementation
                                   for src/parser/docx-questions.js — keep the two in sync
-.github/workflows/
-  update-manifest.yml   ← auto-regenerates manifests on push (see below)
+  process-submission.mjs       ← Node (not Python): drives the results-submission Action;
+                                  imports src/util modules directly ("type": "module")
+.github/
+  ISSUE_TEMPLATE/
+    submit-results.yml  ← public intake form for tournament results CSVs
+  workflows/
+    update-manifest.yml    ← auto-regenerates manifests on push (see below)
+    process-submission.yml ← issue-form submission → validated PR (see below)
 tests/                  ← vitest tests; run with `npm test`
 ```
 
@@ -351,6 +362,55 @@ so the bot's own commit doesn't bounce the workflow.
 manifest) for local experimentation — that folder and slug are not
 checked in and not listed in `TOURNAMENTS`, so nothing publishes it.
 
+### Results-submission pipeline
+
+Scorers publish games themselves instead of sending CSVs to the
+maintainer. The intake is the "Submit game results" issue form
+(`.github/ISSUE_TEMPLATE/submit-results.yml`): a tournament-slug input, a
+paste-the-CSV textarea (`render: text`, so GitHub fences it), and an
+attachments box for dragging in exported `.csv` files. The scorekeeper's
+**Submit Results** button (`ui/submit-results.js`, next to Export CSV)
+opens that form prefilled with the current game's CSV and the selected
+built-in tournament's slug; past ~6.5k chars of URL it falls back to
+clipboard-copy + blank form (GitHub 414s long URLs).
+
+`process-submission.yml` runs on issues labeled `results-submission`
+(opened *and* edited — a rejected submission is fixed by editing the
+issue, which force-updates the same `submission/issue-<N>` branch/PR).
+It runs `scripts/process-submission.mjs`, which:
+
+1. parses the form body (field sections, fence-stripping, attachment
+   URLs — both `user-attachments/files` and legacy `/files/` links),
+2. splits pasted text + attachments into individual games
+   (`splitCsvBundle` — several exports pasted back-to-back are fine),
+3. validates: slug in `TOURNAMENTS`, each game parseable with both
+   teams + players (roster-name mismatches are warnings, not errors),
+4. writes into `tournaments/<slug>/results/` via `planSubmissionWrites`.
+
+**Game identity is content, not filename**: export filenames embed a
+timestamp, so a re-exported correction arrives under a new name. Games
+are keyed on (packet, unordered team pair); a submission matching an
+already-published game *overwrites that file in place* (keeping its
+name), otherwise it lands under a timestamp-free canonical name
+(`<pack> - <A> vs <B>.csv`, `-2`/`-3` on collision). This is what makes
+bulk drops, mid-tournament trickle, and stat corrections all converge to
+one file per game. The pure logic lives in `src/util/submission.js`
+(tested in `tests/submission.test.js`); the workflow turns the resulting
+working-tree diff into a PR (`Closes #N`), so publishing is always a
+maintainer-reviewed merge. Manifests are untouched here — the existing
+auto-manifest workflow regenerates them after the merge.
+
+### Hosting
+
+The repo lives at `consensus-scorekeeper/consensus-scorekeeper.github.io`
+(transferred from `denisfliu/consensus-scorekeeper` in July 2026), so
+GitHub Pages serves it at the org root: https://consensus-scorekeeper.github.io/.
+Keep **all URLs relative** — the site must also work under a subpath
+(local `serve.py`, any future mirror). The submit-results button targets
+the canonical repo explicitly (`SUBMISSIONS_REPO` in
+`ui/submit-results.js`), never `location.href`, so copies of the site
+still file submissions in the right place.
+
 ## Tests
 
 ```
@@ -378,6 +438,8 @@ transparent to tests. Notable test files:
 - `custom-tournaments.test.js`     — localStorage CRUD, slug collisions, merged registry
 - `roster-manager.test.js`         — picker merge + delete/edit fallbacks + modal flows
                                      through the real data-action dispatcher
+- `submission.test.js`             — results-submission planning: bundle splitting,
+                                     content-based game identity, replace-vs-add
 
 If you add stats functionality, add fixtures + assertions there so the
 manifest can't silently drift.

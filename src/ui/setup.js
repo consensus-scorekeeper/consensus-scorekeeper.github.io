@@ -66,6 +66,12 @@ function currentTournament() {
 
 export function getRosterMode() { return rosterMode; }
 
+// Slug of the tournament currently driving preset rosters, or '' in
+// custom mode (a manually built roster isn't tied to any tournament).
+export function getSelectedTournamentSlug() {
+  return rosterMode === 'preset' ? selectedTournamentSlug : '';
+}
+
 export function addPlayer(team) {
   const input = document.getElementById(`add-player-${team}`);
   const name = input.value.trim();

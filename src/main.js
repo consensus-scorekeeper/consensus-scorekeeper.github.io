@@ -27,7 +27,8 @@ import { rebuildJailbreakLocks } from './game/jailbreak.js';
 import { rebuildStreakGroups } from './game/streaks.js';
 import { getInitials, getAnsweredBy, getSplitPair, getCategoryRunSize } from './game/categories.js';
 import { STORAGE_KEY, PDF_STORAGE_KEY, isGameVisible, saveState, savePdfBytes, loadPdfBytes, clearSavedState } from './game/persistence.js';
-import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameField, toggleRosterMode } from './ui/setup.js';
+import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameField, toggleRosterMode, getSelectedTournamentSlug } from './ui/setup.js';
+import { openSubmitResults } from './ui/submit-results.js';
 import { parsePdf, parseDocx, parseTextFile, processZipBuffer, handleZipUpload } from './loader.js';
 import { readZip, looksLikePdfOrZip } from './parser/zip.js';
 import { extractRichLinesFromPdf } from './parser/pdf-text.js';
@@ -109,6 +110,15 @@ function clearAndReload() {
 function exportCsv() {
   const csv = buildResultsCsv(state);
   downloadTextFile(buildResultsFilename(state), '﻿' + csv, 'text/csv;charset=utf-8;');
+}
+
+// Open the GitHub issue form (prefilled with this game's CSV) that feeds
+// the results-submission pipeline — see ui/submit-results.js.
+function submitResults() {
+  openSubmitResults({
+    csv: buildResultsCsv(state),
+    tournamentSlug: getSelectedTournamentSlug(),
+  });
 }
 
 // loadState restores the last session from localStorage. Lives here because
@@ -194,6 +204,7 @@ const ACTION_HANDLERS = {
   'undo-last': () => undoLast(),
   'toggle-inline-pdf': () => toggleInlinePdf(),
   'export-csv': () => exportCsv(),
+  'submit-results': () => submitResults(),
   'reparse-current-pdf': () => reparseCurrentPdf(),
   'back-to-setup': () => backToSetup(),
   ...formatPackActions,
