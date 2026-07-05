@@ -128,18 +128,10 @@ for (const [i, chunk] of chunks.entries()) {
 
 let writes = [];
 if (errors.length === 0) {
-  // Warn (don't fail) on team names outside the tournament's rosters —
-  // rosters drift, and the stats aggregation keys on names in the CSV.
-  const rosterNames = new Set(tournament.rosters.map((r) => r.name.toLowerCase()));
-  const unknownTeams = new Set(
-    games
-      .flatMap((g) => [g.parsed.teamA, g.parsed.teamB])
-      .filter((team) => !rosterNames.has(team.toLowerCase()))
-  );
-  for (const team of unknownTeams) {
-    warnings.push(`Team "${team}" is not in the ${tournament.name} rosters — double-check the spelling.`);
-  }
-
+  // Team names are deliberately NOT checked against the tournament's
+  // registry rosters: subs happen, rosters drift, and the stats
+  // aggregation keys purely on the names in the CSV. The maintainer
+  // sees the team names in the PR diff before anything publishes.
   const resultsDir = path.join(repoRoot, 'tournaments', tournament.slug, 'results');
   fs.mkdirSync(resultsDir, { recursive: true });
   const existing = [];

@@ -384,7 +384,8 @@ It runs `scripts/process-submission.mjs`, which:
 2. splits pasted text + attachments into individual games
    (`splitCsvBundle` — several exports pasted back-to-back are fine),
 3. validates: slug in `TOURNAMENTS`, each game parseable with both
-   teams + players (roster-name mismatches are warnings, not errors),
+   teams + players (team names are deliberately *not* checked against
+   registry rosters — subs happen, and the maintainer reviews the PR),
 4. writes into `tournaments/<slug>/results/` via `planSubmissionWrites`.
 
 **Game identity is content, not filename**: export filenames embed a
