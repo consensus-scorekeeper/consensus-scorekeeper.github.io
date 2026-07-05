@@ -38,14 +38,8 @@ export const TOURNAMENTS = [
 ];
 
 // The "current/most-recent" tournament. Drives the default selection in
-// the setup-screen tournament dropdown and serves as the back-compat target
-// for ROSTER_PRESETS / TOURNAMENT_NAME consumers.
+// the setup-screen tournament dropdown.
 export const DEFAULT_TOURNAMENT = TOURNAMENTS[0];
-
-// Back-compat exports for callers that pre-date the multi-tournament shape.
-// New code should reach into TOURNAMENTS directly.
-export const ROSTER_PRESETS = DEFAULT_TOURNAMENT.rosters;
-export const TOURNAMENT_NAME = DEFAULT_TOURNAMENT.name;
 
 export function getTournamentBySlug(slug) {
   return TOURNAMENTS.find((t) => t.slug === slug) || null;

@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state } from '../src/main.js';
 import { setTeamNameField, toggleRosterMode, getRosterMode } from '../src/ui/setup.js';
-import { ROSTER_PRESETS, PLAYER_SUGGESTIONS, TOURNAMENTS, DEFAULT_TOURNAMENT } from '../src/ui/roster-presets.js';
+import { PLAYER_SUGGESTIONS, TOURNAMENTS, DEFAULT_TOURNAMENT } from '../src/ui/roster-presets.js';
 import { resetState } from './helpers.js';
 
 // Toggle into a known mode before each test. setupSetupScreen ran at main.js
@@ -41,9 +41,6 @@ describe('TOURNAMENTS registry', () => {
     expect(new Set(slugs).size).toBe(slugs.length);
   });
 
-  it('ROSTER_PRESETS mirrors the default tournament for back-compat', () => {
-    expect(ROSTER_PRESETS).toBe(DEFAULT_TOURNAMENT.rosters);
-  });
 });
 
 describe('team-name <select> presets', () => {

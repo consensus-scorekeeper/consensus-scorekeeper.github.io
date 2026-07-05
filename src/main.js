@@ -31,32 +31,27 @@ import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameFie
 import { parsePdf, parseDocx, parseTextFile, processZipBuffer, handleZipUpload } from './loader.js';
 import { readZip, looksLikePdfOrZip } from './parser/zip.js';
 import { extractRichLinesFromPdf } from './parser/pdf-text.js';
-import { SECTION_WORDS, STRUCTURAL_RE, cleanTrailing, extractRichRange, richToHtml, parseQuestions } from './parser/questions.js';
+import { cleanTrailing, extractRichRange, richToHtml, parseQuestions } from './parser/questions.js';
 import {
   padQuestionsToSlots,
   startGame,
   backToSetup,
   renderGame,
-  renderQuestion,
   nextQuestion,
   prevQuestion,
   skipQuestion,
   goToQuestion,
-  renderPlayerPanel,
   setupGameScreen,
 } from './ui/game.js';
-import { applyCustomAward, populateCustomAward, setupDevTools, reparseCurrentPdf as reparsePdfImpl } from './ui/dev-tools.js';
+import { applyCustomAward, setupDevTools, reparseCurrentPdf as reparsePdfImpl } from './ui/dev-tools.js';
 import { setupKeybinds } from './ui/keybinds.js';
 import { escapeHtml, csvEscape } from './util/escape.js';
 import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
 import { setupSplitters } from './ui/splitter.js';
 import {
   viewPdf,
-  renderPdfPage,
   closePdfViewer,
-  renderInlinePdf,
   syncInlinePdfToQuestion,
-  updateInlinePdfButton,
   toggleInlinePdf,
   pdfPagePrev,
   pdfPageNext,

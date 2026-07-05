@@ -91,6 +91,8 @@ src/
     tournament-aggregate.js ← aggregateTournament + gamesForTeam + gamesForPlayer
 assets/
   tutorial-pack.pdf     ← bundled pack the tutorial sandbox loads
+  text-pack-llm-prompt.txt ← LLM reformatting prompt the Format-pack modal fills in
+  sample_txt_pack.txt   ← full 100-slot .txt pack; fixture for tests/text-pack.test.js
 scripts/                ← Python helpers; run from anywhere (paths use __file__)
   serve.py is at root   ← local dev server (port 8000); also /proxy/ for consensustrivia.com
   scrape_packs.py       ← regenerates ui/pack-browser.js's PACK_CATALOG
@@ -306,9 +308,10 @@ so the bot's own commit doesn't bounce the workflow.
 
 `scripts/update_manifests.py` is also a manual fallback for local dev
 (when running `python serve.py` against an unpushed checkout).
-`scripts/generate_fake_tournament.py` re-rolls the demo data into
-`tournaments/fake-round-robin-2026/results/` and writes that folder's
-manifest at the end.
+`scripts/generate_fake_tournament.py` writes a demo round-robin into
+`tournaments/fake-round-robin-2026/results/` (plus that folder's
+manifest) for local experimentation — that folder and slug are not
+checked in and not listed in `TOURNAMENTS`, so nothing publishes it.
 
 ## Tests
 
@@ -327,9 +330,11 @@ transparent to tests. Notable test files:
 - `export-csv.test.js`             — CSV layout snapshot (keep multi-section format intact)
 - `parse-results-csv.test.js`      — round-trip of the CSV exporter
 - `tournament-aggregate.test.js`   — standings sort, leaderboard, per-team / per-player
-- `tournament-fixtures.test.js`    — runs every CSV in `assets/tournament-results/`
-                                     through parse + aggregate, plus asserts the manifest
-                                     stays in sync with the folder
+- `tournament-fixtures.test.js`    — runs every CSV in `tournaments/*/results/`
+                                     through parse + aggregate, plus asserts each manifest
+                                     stays in sync with its folder
+- `text-pack.test.js`              — .txt pack parsing; the full-pack cases read the
+                                     `assets/sample_txt_pack.txt` fixture
 
 If you add stats functionality, add fixtures + assertions there so the
 manifest can't silently drift.

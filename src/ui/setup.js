@@ -66,7 +66,6 @@ function currentTournament() {
 }
 
 export function getRosterMode() { return rosterMode; }
-export function getSelectedTournamentSlug() { return selectedTournamentSlug; }
 
 export function addPlayer(team) {
   const input = document.getElementById(`add-player-${team}`);

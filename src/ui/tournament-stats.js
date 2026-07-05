@@ -385,10 +385,3 @@ export function setupTournamentStats({ manifestUrl } = {}) {
   render();
   if (manifestUrl) loadFromManifest(manifestUrl);
 }
-
-// Test/inspection helpers — not used by the app.
-export function _getTsState() { return tsState; }
-export function _resetTsStateForTests() {
-  tsState.games = [];
-  resetView();
-}
