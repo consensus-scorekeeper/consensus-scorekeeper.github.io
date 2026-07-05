@@ -35,6 +35,24 @@ export const TOURNAMENTS = [
       { name: 'Dust of Snow', players: ['Lorie Au Yeung', 'Huy Lai', 'Doug Robeson'] },
     ],
   },
+  {
+    "name": "Stanford Consensus 2027",
+    "slug": "stanford-consensus-2027",
+    "rosters": [
+      {
+        "name": "Smoke Test Alpha",
+        "players": [
+          "Test Player One"
+        ]
+      },
+      {
+        "name": "Smoke Test Beta",
+        "players": [
+          "Test Player Two"
+        ]
+      }
+    ]
+  },
 ];
 
 // The "current/most-recent" tournament. Drives the default selection in

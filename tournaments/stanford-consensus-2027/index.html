@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- The slug below is the only thing this file customizes. stats-main.js
+     looks up the matching TOURNAMENTS entry and stamps the document
+     title + page heading. To add a new tournament, copy this file into
+     tournaments/<new-slug>/index.html and update the slug here. -->
+<meta name="tournament-slug" content="stanford-consensus-2027">
+<title>Stanford Consensus 2027 — Stats</title>
+<link rel="stylesheet" href="../../styles/main.css">
+</head>
+<body>
+
+<div id="stats-page">
+  <header class="stats-header">
+    <h1 id="stats-page-heading">Stanford Consensus 2026</h1>
+    <a class="stats-back-link" href="../index.html">← All tournaments</a>
+  </header>
+
+  <section class="setup-section" id="tournament-stats-section">
+    <p class="ts-intro">
+      <a href="rules-slides.html">View rules briefing →</a>
+    </p>
+    <span class="ts-status" id="ts-status"></span>
+    <div id="ts-content"></div>
+  </section>
+</div>
+
+<script type="module" src="../../src/stats-main.js"></script>
+
+</body>
+</html>

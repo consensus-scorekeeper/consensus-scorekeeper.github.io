@@ -1,0 +1,14 @@
+﻿Packet,Pipeline Smoke Test.pdf
+Team A,Smoke Test Alpha
+Team B,Smoke Test Beta
+Final Score,Smoke Test Alpha 30 - 20 Smoke Test Beta
+Winner,Smoke Test Alpha
+Exported,2026-07-05T20:00:00.000Z
+
+Team,Score
+Smoke Test Alpha,30
+Smoke Test Beta,20
+
+Player,Team,Points
+Test Player One,Smoke Test Alpha,30
+Test Player Two,Smoke Test Beta,20
