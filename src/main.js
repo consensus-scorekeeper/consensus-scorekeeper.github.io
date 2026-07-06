@@ -50,7 +50,7 @@ import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
 import { downloadTextFile } from './ui/download.js';
 import { setupSplitters } from './ui/splitter.js';
 import {
-  viewPdf,
+  viewPack,
   closePdfViewer,
   syncInlinePdfToQuestion,
   toggleInlinePdf,
@@ -149,6 +149,7 @@ function loadState() {
     state.streakScoring = ss;
     state.packName = snap.packName || null;
     state.parseIssues = snap.parseIssues || [];
+    state.packDoc = snap.packDoc || null;
     state.inlinePdfHidden = !!snap.inlinePdfHidden;
     rebuildStreakGroups();
     renderParseReport();
@@ -203,7 +204,7 @@ const ACTION_HANDLERS = {
   'next-question': () => nextQuestion(),
   'inline-pdf-prev': () => inlinePdfPrev(),
   'inline-pdf-next': () => inlinePdfNext(),
-  'view-pdf': () => viewPdf(),
+  'view-pack': () => viewPack(),
   'undo-last': () => undoLast(),
   'toggle-inline-pdf': () => toggleInlinePdf(),
   'export-csv': () => exportCsv(),

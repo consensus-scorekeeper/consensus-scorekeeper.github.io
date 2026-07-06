@@ -36,6 +36,7 @@ export function saveState() {
       streakScoring: state.streakScoring,
       packName: state.packName,
       parseIssues: state.parseIssues,
+      packDoc: state.packDoc,
       gameActive: isGameVisible(),
       inlinePdfHidden: state.inlinePdfHidden,
     };

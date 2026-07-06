@@ -92,7 +92,8 @@ src/
     download.js         ← downloadTextFile: Blob + anchor-click browser download
     drag-reorder.js     ← attachDragReorder: HTML5 drag handler for roster lists / panels
     game.js             ← renderGame (single state subscriber), renderQuestion, etc.
-    pdf-viewer.js       ← inline + fullscreen pdf.js viewer
+    pdf-viewer.js       ← inline + fullscreen pack viewer: pdf.js canvas for PDFs,
+                          rendered state.packDoc text for .docx/.txt packs
     scoreboard-popout.js ← BroadcastChannel + popout HTML template
     pack-browser.js     ← PACK_CATALOG, fetchWithFallback, renderBrowser
     keybinds.js         ← global keydown listener
@@ -283,8 +284,13 @@ All paths land in loader.js's single `applyParseResult()`: the >=10
 question acceptance gate, the status line (with issue count), writing
 `state.parseIssues`, rendering the parse report, and persistence. Thrown
 errors become a single `exception` issue so the report is never stale.
-Non-PDF paths clear `state.pdfBytes` + `clearSavedPdfBytes()` so the
-inline viewer hides and a reload can't resurrect a stale PDF.
+Non-PDF paths clear `state.pdfBytes` + `clearSavedPdfBytes()` (no stale
+PDF on reload) and instead set `state.packDoc` — the pack's RichDoc —
+which the pack viewer (`ui/pdf-viewer.js`) renders as text: the inline
+panel auto-follows the current question by its `N.` line, and the
+"Expand" overlay shows the whole pack. The controls-bar toggle reads
+Hide Pack / Show Pack and works for every format. `packDoc` rides in
+the `consensus-state-v1` snapshot so text packs survive a reload.
 
 ### Parse diagnostics
 

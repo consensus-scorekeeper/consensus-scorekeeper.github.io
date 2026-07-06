@@ -412,10 +412,11 @@ export function docxParagraphsToDoc(paragraphs) {
 }
 
 // Parse pre-extracted paragraphs ([{ text, bold }] runs per paragraph).
+// `doc` is the transpiled RichDoc; the pack viewer renders it for docx packs.
 export function parseDocxParagraphs(paragraphs) {
   const { doc, adapterIssues } = docxParagraphsToDoc(paragraphs);
   const { questions, issues } = parseQuestions(doc);
-  return { questions, issues: [...adapterIssues, ...issues] };
+  return { questions, issues: [...adapterIssues, ...issues], doc };
 }
 
 export async function parseDocxBuffer(buffer) {

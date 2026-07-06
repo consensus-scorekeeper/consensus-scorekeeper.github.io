@@ -165,7 +165,9 @@
   </div>
 </div>
 
-<!-- ==================== PDF VIEWER OVERLAY ==================== -->
+<!-- ==================== PACK VIEWER OVERLAY ==================== -->
+<!-- PDFs render into the canvas; .docx/.txt packs render as text into
+     #pack-overlay-text (see ui/pdf-viewer.js setOverlayMode). -->
 <div class="pdf-overlay" id="pdf-overlay">
   <div class="pdf-overlay-bar">
     <button data-action="pdf-page-prev" id="pdf-page-prev">&larr; Page</button>
@@ -175,6 +177,7 @@
     <button data-action="close-pdf-viewer">Close (Esc)</button>
   </div>
   <canvas id="pdf-canvas"></canvas>
+  <div class="pack-overlay-text" id="pack-overlay-text" style="display:none"></div>
 </div>
 
 <!-- ==================== GAME SCREEN ==================== -->
@@ -246,11 +249,12 @@
             <span id="inline-pdf-label">Page 1 / 1</span>
             <button data-action="inline-pdf-next" id="inline-pdf-next">Page &rarr;</button>
             <span style="flex:1"></span>
-            <button data-action="view-pdf" title="Open fullscreen view">Expand &#x2197;</button>
+            <button data-action="view-pack" title="Open fullscreen view">Expand &#x2197;</button>
           </div>
           <div class="inline-pdf-canvas-wrap">
             <canvas id="inline-pdf-canvas"></canvas>
           </div>
+          <div class="inline-pack-text" id="inline-pack-text" style="display:none"></div>
         </div>
       </div>
 
@@ -271,7 +275,7 @@
         <span><kbd>&larr;</kbd> Prev</span>
         <span><kbd>Ctrl+Z</kbd> Undo</span>
         <button class="btn undo-btn" id="undo-btn" data-action="undo-last" disabled>Undo Last</button>
-        <button class="btn" id="toggle-inline-pdf-btn" data-action="toggle-inline-pdf">Hide PDF</button>
+        <button class="btn" id="toggle-inline-pdf-btn" data-action="toggle-inline-pdf">Hide Pack</button>
         <button class="btn" data-action="export-csv">Export CSV</button>
         <button class="btn" data-action="submit-results" title="Publish this game to the public tournament stats page (opens a prefilled GitHub form)">Submit Results</button>
         <details class="dev-tools" id="dev-tools">

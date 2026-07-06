@@ -21,6 +21,9 @@ export const state = {
   // parser/diagnostics.js). Drives the parse report on the setup screen and
   // the per-slot warning flags in-game.
   parseIssues: [],
+  // RichDoc of the loaded pack for non-PDF formats (.docx/.txt) — the pack
+  // viewer renders it as text. null for PDFs (they render via pdfBytes).
+  packDoc: null,
   pdfBytes: null,
   pdfViewer: { doc: null, currentPage: 1, inlinePage: null },
   inlinePdfHidden: false,

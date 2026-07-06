@@ -26,8 +26,9 @@ import { makeIssue } from './diagnostics.js';
 // suspected-category diagnostic below, never for parsing decisions.
 const CATEGORY_LIKE_RE = /^(Set of \d+|Streaks?\b|Jackpot\b|Jailbreak\b|Double Jump\b|\d+-Part Blitz\b)/i;
 
-// Returns { questions, issues } — adapter issues (with line numbers) first,
-// then whatever the universal parser reports.
+// Returns { questions, issues, doc } — adapter issues (with line numbers)
+// first, then whatever the universal parser reports. `doc` is the RichDoc
+// the pack parsed from; the pack viewer renders it for non-PDF packs.
 export function parseTextPack(text) {
   const rawLines = text.split(/\r?\n/);
   const adapterIssues = [];
@@ -128,5 +129,5 @@ export function parseTextPack(text) {
     lines: specs.map(s => makeLine(s.text, { isBold: s.isBold, lineNo: s.lineNo })),
   };
   const { questions, issues: coreIssues } = parseQuestions(doc);
-  return { questions, issues: [...adapterIssues, ...coreIssues] };
+  return { questions, issues: [...adapterIssues, ...coreIssues], doc };
 }

@@ -37,9 +37,11 @@ export async function parsePdfToResult(arrayBuffer) {
 
 // Single post-parse path for every format: acceptance gate, state writes,
 // status message, parse report, persistence. `isPdf` controls whether the
-// (already state-resident) PDF bytes are persisted alongside the state.
-function applyParseResult({ filename, questions, issues, totalSlots, isPdf }) {
+// (already state-resident) PDF bytes are persisted alongside the state;
+// `packDoc` is the RichDoc the pack viewer renders for non-PDF formats.
+function applyParseResult({ filename, questions, issues, totalSlots, isPdf, packDoc = null }) {
   state.parseIssues = issues;
+  state.packDoc = packDoc;
   if (questions.length >= 10) {
     state.questions = questions;
     state.hasQuestions = true;
@@ -66,6 +68,7 @@ function applyParseResult({ filename, questions, issues, totalSlots, isPdf }) {
 function applyParseFailure(message) {
   state.questions = [];
   state.hasQuestions = false;
+  state.packDoc = null;
   state.parseIssues = [{ code: 'exception', severity: 'error', message }];
   setStatus(message, 'error');
   renderParseReport();
@@ -121,9 +124,9 @@ async function parseZipEntryToResult(name, data) {
   } else {
     parsed = parseTextPack(new TextDecoder('utf-8').decode(data));
   }
-  const { questions, issues } = parsed;
+  const { questions, issues, doc } = parsed;
   issues.push(...analyzeQuestions(questions, { source: format }));
-  return { questions, issues, totalSlots: computeTotalSlots(questions) };
+  return { questions, issues, totalSlots: computeTotalSlots(questions), doc };
 }
 
 // Full load of a zip entry into state (status line, persistence, report),
@@ -185,7 +188,7 @@ function applyCachedZipResult(filename, data, result) {
     state.pdfBytes = null;
     clearSavedPdfBytes();
   }
-  applyParseResult({ filename, ...result, isPdf });
+  applyParseResult({ filename, questions: result.questions, issues: result.issues, totalSlots: result.totalSlots, isPdf, packDoc: isPdf ? null : (result.doc || null) });
 }
 
 export async function processZipBuffer(buffer) {
@@ -245,9 +248,9 @@ async function parseTextual({ filename, parseFn, parsingMessage, errorPrefix, so
   if (state.pdfViewer) state.pdfViewer.doc = null;
   clearSavedPdfBytes();
   try {
-    const { questions, issues } = await parseFn();
+    const { questions, issues, doc } = await parseFn();
     issues.push(...analyzeQuestions(questions, { source }));
-    applyParseResult({ filename, questions, issues, totalSlots: computeTotalSlots(questions), isPdf: false });
+    applyParseResult({ filename, questions, issues, totalSlots: computeTotalSlots(questions), isPdf: false, packDoc: doc || null });
   } catch (err) {
     applyParseFailure(`${errorPrefix}: ${err.message}`);
   }

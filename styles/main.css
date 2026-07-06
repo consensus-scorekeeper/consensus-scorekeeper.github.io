@@ -600,6 +600,19 @@ body {
   max-width: 100%;
   height: auto;
 }
+/* Fullscreen text rendering for non-PDF packs (.docx/.txt). */
+.pack-overlay-text {
+  position: relative;
+  background: #fff;
+  box-shadow: 0 4px 30px rgba(0,0,0,0.5);
+  border-radius: 4px;
+  width: min(820px, 100%);
+  max-height: calc(100vh - 110px);
+  overflow: auto;
+  padding: 24px 32px;
+  font-size: 1rem;
+  line-height: 1.5;
+}
 
 /* Format-pack modal: paste raw questions, copy LLM prompt, paste LLM output, load. */
 .format-modal {
@@ -1065,6 +1078,34 @@ body {
   background: #fff;
   box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }
+
+/* Inline text rendering for non-PDF packs — same footprint as the canvas wrap. */
+.inline-pack-text {
+  position: relative;
+  height: 320px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+  min-height: 120px;
+  max-height: 80vh;
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+/* Shared pack-text line styles (inline + fullscreen). */
+.pack-line { margin: 2px 0; }
+.pack-line-bold {
+  font-weight: 700;
+  margin-top: 12px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 2px;
+}
+.pack-line-q { margin-top: 6px; }
+.pack-line-a { margin-left: 18px; color: #333; }
 
 /* ==================== TUTORIAL OVERLAY ==================== */
 /* The highlighted element gets a giant outer box-shadow that dims everything

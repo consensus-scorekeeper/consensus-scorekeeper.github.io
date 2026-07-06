@@ -65,7 +65,7 @@ const STEPS = [
   {
     title: 'Splits rounds',
     target: '.question-content',
-    body: `Two paired sub-categories played back-to-back. <strong>Teams are required to split:</strong> they designate players for each category — it doesn't have to be an even split. <em>Announce both category names up front</em> so teams can decide who covers what. Both names appear in the sidebar and the inline PDF; the pop-out scoreboard also shows both with the current one highlighted.`,
+    body: `Two paired sub-categories played back-to-back. <strong>Teams are required to split:</strong> they designate players for each category — it doesn't have to be an even split. <em>Announce both category names up front</em> so teams can decide who covers what. Both names appear in the sidebar and the inline pack viewer; the pop-out scoreboard also shows both with the current one highlighted.`,
     autoJumpTo: (q) => q && q.category && q.category.startsWith('Splits 1:'),
   },
   {
@@ -76,7 +76,7 @@ const STEPS = [
   {
     title: 'When parsing goes wrong',
     target: ['#custom-award', '#inline-pdf', '#toggle-inline-pdf-btn'],
-    body: `<strong>+/− Points</strong> in the scoreboard area is your emergency override — assign or subtract arbitrary points on any question if the parser misread something. To check the source, the <strong>inline PDF</strong> on the right auto-follows the current question (click <em>Expand</em> for fullscreen with arrow keys). Click <strong>Hide PDF</strong> if you don't need it and want the screen space; click again to bring it back.`,
+    body: `<strong>+/− Points</strong> in the scoreboard area is your emergency override — assign or subtract arbitrary points on any question if the parser misread something. To check the source, the <strong>inline pack viewer</strong> on the right auto-follows the current question (click <em>Expand</em> for fullscreen with arrow keys). Click <strong>Hide Pack</strong> if you don't need it and want the screen space; click again to bring it back.`,
   },
   {
     title: 'Auto-save',
