@@ -147,7 +147,7 @@ async function parseTextual({ filename, parseFn, parsingMessage, errorPrefix, so
 export async function parseDocx(arrayBuffer, filename) {
   await parseTextual({
     filename,
-    parseFn: async () => ({ questions: await parseDocxBuffer(arrayBuffer), issues: [] }),
+    parseFn: () => parseDocxBuffer(arrayBuffer),
     parsingMessage: 'Parsing Word document...',
     errorPrefix: 'Error parsing .docx',
     source: 'docx',

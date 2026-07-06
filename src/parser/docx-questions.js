@@ -1,10 +1,15 @@
-// Parse a Consensus trivia packet from .docx paragraphs into the same
-// question shape that parseQuestions (PDF parser) emits, so the scorekeeper
-// can consume both interchangeably. Mirrors scripts/parse_consensus_docx.py;
-// keep that script and this module in sync when fixing edge cases.
+// Docx adapter: transpiles a Consensus packet's .docx paragraphs into the
+// canonical numbered RichDoc lines the universal parser
+// (parser/questions.js) consumes — the same encoding PDF and .txt packs
+// use. Docx packets carry no question numbers, so this adapter assigns them
+// sequentially and encodes each streak's slot span as a gap to the next
+// number (the core derives streakRange from that gap, exactly as it does
+// for PDFs).
 
-import { escapeHtml } from '../util/escape.js';
 import { extractDocxParagraphs } from './docx-text.js';
+import { parseQuestions } from './questions.js';
+import { makeLine } from './rich-doc.js';
+import { makeIssue } from './diagnostics.js';
 
 const QUOTE_CHARS = "‘’“”'\"";
 const QUOTE_RE = new RegExp(`[${QUOTE_CHARS.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}]`, 'g');
@@ -53,31 +58,6 @@ function runsPlain(runs) {
   let s = '';
   for (const r of runs) s += r.text;
   return s;
-}
-
-function runsBoldPhrases(runs) {
-  const phrases = [];
-  let cur = '';
-  for (const r of runs) {
-    if (r.bold) cur += r.text;
-    else {
-      const t = cur.trim();
-      if (t) phrases.push(t);
-      cur = '';
-    }
-  }
-  const t = cur.trim();
-  if (t) phrases.push(t);
-  return phrases;
-}
-
-function richToHtml(runs) {
-  let out = '';
-  for (const r of runs) {
-    const safe = escapeHtml(r.text);
-    out += r.bold ? `<b><u>${safe}</u></b>` : safe;
-  }
-  return out;
 }
 
 function sliceRuns(runs, dropChars) {
@@ -211,198 +191,233 @@ function mergeContinuations(paragraphs) {
   return out;
 }
 
-class Parser {
-  constructor() {
-    this.questions = [];
-    this.quarter = null;
-    this.category = null;
-    this.categoryKind = null;
-    this.subcategory = null;
-    this.instructions = null;
-    this.posInCategory = 0;
-    this.num = 0;
-    this.inSplits = false;
-    this.splitsPendingSubtitle = false;
-    this.streakBuffer = null; // { prompt: string, answers: runs[] }
-    this.jackpotParts = null; // { parts: string[], answerRuns: runs[] }
-  }
+// ==================== transpiler ====================
 
-  pushQuestion({ question, answerRuns, kind = 'single', streakRange = null }) {
-    this.num += 1;
-    this.posInCategory += 1;
-    if (this.quarter === null) this.quarter = 'FIRST QUARTER';
-    const answerPlain = runsPlain(answerRuns).trim();
-    const answerBoldPhrases = runsBoldPhrases(answerRuns);
-    const q = {
-      num: this.num,
-      question: question.trim(),
-      answer: answerPlain || '(answer not parsed)',
-      answerHtml: answerRuns.length ? richToHtml(answerRuns) : '<i>(answer not parsed)</i>',
-      category: this.category,
-      posInCategory: this.posInCategory,
-      categoryInstructions: this.instructions || null,
-      subcategory: this.subcategory || null,
-      streakRange,
-      pageNum: null,
-      yPos: null,
-      _kind: kind,
-      _answerBold: answerBoldPhrases,
-    };
-    this.questions.push(q);
-    return q;
-  }
+// Docx runs can contain literal \n (w:br) and \t (w:tab); RichDoc lines are
+// single-line, so collapse them to spaces.
+function sanitizeRuns(runs) {
+  return runs
+    .map(r => ({ text: r.text.replace(/[\r\n\t]+/g, ' '), bold: !!r.bold }))
+    .filter(r => r.text);
+}
 
-  flushStreak() {
-    if (!this.streakBuffer) return;
-    const { prompt, answers } = this.streakBuffer;
-    this.streakBuffer = null;
-    const n = answers.length;
-    if (!n) return;
-    const slots = inferStreakSlotCount(prompt, n);
-    const startNum = this.num + 1;
-    const endNum = startNum + slots - 1;
-    const plainParts = answers.map(a => runsPlain(a).trim());
-    const htmlParts = answers.map(a => richToHtml(a));
-    const q = this.pushQuestion({
-      question: prompt.trim(),
-      answerRuns: [],
-      kind: 'streak',
-      streakRange: { start: startNum, end: endNum },
-    });
-    q.answer = plainParts.join(' | ');
-    q.answerHtml = htmlParts.map(h => `<div>Answer: ${h}</div>`).join('');
-    // Advance num to consume the rest of the streak's range.
-    this.num = endNum;
+// Strip leading/trailing whitespace across a run list so the joined runs
+// equal the trimmed text.
+function trimRuns(runs) {
+  const out = runs.map(r => ({ ...r }));
+  while (out.length) {
+    out[0].text = out[0].text.replace(/^\s+/, '');
+    if (out[0].text) break;
+    out.shift();
   }
+  while (out.length) {
+    const last = out[out.length - 1];
+    last.text = last.text.replace(/\s+$/, '');
+    if (last.text) break;
+    out.pop();
+  }
+  return out;
+}
 
-  flushJackpot() {
-    if (!this.jackpotParts) return;
-    const { parts, answerRuns } = this.jackpotParts;
-    this.jackpotParts = null;
-    for (const partText of parts) {
-      this.pushQuestion({
-        question: partText,
-        answerRuns,
-        kind: 'jackpot-part',
-      });
+const clean = (text) => text.replace(/\s+/g, ' ').trim();
+
+export function docxParagraphsToDoc(paragraphs) {
+  const lines = [];
+  const adapterIssues = [];
+  let n = 0;                      // slot counter — becomes the question numbers
+  let categoryKind = null;
+  let categoryName = null;
+  let inSplits = false;
+  let splitsPendingSubtitle = false;
+  let questionsInGroup = 0;       // since the current category / splits sub-title
+  let streak = null;              // { prompt, answers: runs[] }
+  let pendingStreakPrompt = null;
+  let jackpot = null;             // { parts: string[], answerRuns }
+  let overflowWarned = false;
+
+  const emit = (text, opts) => lines.push(makeLine(text, opts));
+  const emitCategory = (name) => {
+    emit(name, { isBold: true });
+    questionsInGroup = 0;
+  };
+  const nextNum = () => {
+    n += 1;
+    if (n > 100 && !overflowWarned) {
+      overflowWarned = true;
+      adapterIssues.push(makeIssue('docx-overflow', 'warn',
+        'More than 100 question slots found — slots beyond 100 are ignored.'));
     }
-  }
+    return n;
+  };
+  const emitAnswer = (answerRuns) => {
+    const runs = trimRuns(sanitizeRuns(answerRuns));
+    const plain = runs.map(r => r.text).join('');
+    if (!plain) { emit('A:'); return; }
+    emit(`A: ${plain}`, { segments: [{ text: 'A: ', bold: false }, ...runs] });
+  };
+  const emitQA = (questionText, answerRuns) => {
+    emit(`${nextNum()}. ${clean(questionText)}`);
+    emitAnswer(answerRuns);
+    questionsInGroup += 1;
+  };
 
-  openCategory(name, kind) {
-    this.flushStreak();
-    this.flushJackpot();
-    this.category = name;
-    this.categoryKind = kind;
-    this.subcategory = null;
-    this.instructions = null;
-    this.posInCategory = 0;
-    this.inSplits = kind === 'splits';
-    this.splitsPendingSubtitle = this.inSplits;
-    if (kind === 'jackpot') this.jackpotParts = { parts: [], answerRuns: [] };
-  }
+  const flushStreak = () => {
+    if (!streak) return;
+    const { prompt, answers } = streak;
+    streak = null;
+    if (!answers.length) {
+      adapterIssues.push(makeIssue('docx-empty-streak', 'warn',
+        'A Streak had a prompt but no "A:" answer lines — it was dropped.'));
+      return;
+    }
+    if (!CAP_RE.test(prompt || '')) {
+      adapterIssues.push(makeIssue('docx-streak-cap-fallback', 'warn',
+        `Streak prompt doesn't state a cap ("name up to N…") — its slot span was guessed from the ${answers.length} listed answers.`,
+        { slot: n + 1 }));
+    }
+    const slots = inferStreakSlotCount(prompt, answers.length);
+    const qNum = nextNum();
+    emit(`${qNum}. ${clean(prompt || 'Streak')}`);
+    for (const a of answers) emitAnswer(a);
+    // Consume the rest of the streak's slots so the gap to the next number
+    // encodes the span.
+    n = qNum + slots - 1;
+    questionsInGroup += 1;
+  };
 
-  openSplitsSubcategory(title) {
-    this.subcategory = title;
-    this.instructions = null;
-    this.posInCategory = 0;
-    this.splitsPendingSubtitle = false;
-  }
+  const flushJackpot = () => {
+    if (!jackpot) return;
+    const { parts, answerRuns } = jackpot;
+    jackpot = null;
+    if (!parts.length) return;
+    parts.forEach((part, i) => {
+      emit(`${nextNum()}. ${clean(part)}`);
+      // Only the final part carries the shared answer; the core propagates
+      // it back to the earlier parts.
+      if (i === parts.length - 1) emitAnswer(answerRuns || []);
+    });
+    questionsInGroup += parts.length;
+  };
 
-  handleParagraph(runs) {
-    const plain = runsPlain(runs).trim();
-    if (!plain) return;
+  for (const runs of mergeContinuations(paragraphs)) {
+    const plain = clean(runsPlain(runs));
+    if (!plain) continue;
 
     if (QUARTER_RE.test(normalizeHeader(plain))) {
-      this.flushStreak();
-      this.flushJackpot();
-      this.quarter = plain.toUpperCase();
-      return;
+      flushStreak();
+      flushJackpot();
+      continue;
     }
 
     const header = classifyHeader(plain);
     if (header) {
-      if (header.kind === 'dj') {
-        if (this.category !== 'Double Jump') this.openCategory('Double Jump', 'dj');
-        return;
+      // Consecutive DJ headers continue the same Double Jump block (docx
+      // packs repeat the header for every pair).
+      if (header.kind === 'dj' && categoryName === 'Double Jump') continue;
+      flushStreak();
+      flushJackpot();
+      categoryKind = header.kind;
+      categoryName = header.name;
+      inSplits = header.kind === 'splits';
+      splitsPendingSubtitle = inSplits;
+      pendingStreakPrompt = null;
+      if (header.kind === 'splits') {
+        // Non-bold "Splits:" is the core's split trigger; the bold
+        // sub-category titles follow.
+        emit('Splits:');
+        questionsInGroup = 0;
+      } else {
+        emitCategory(header.name);
+        if (header.kind === 'jackpot') jackpot = { parts: [], answerRuns: [] };
       }
-      this.openCategory(header.name, header.kind);
-      return;
+      continue;
     }
 
-    // Inside Splits, the first paragraph after the "Splits" header (or
-    // after the previous sub-category's last question) is the sub-category title.
-    if (this.inSplits && this.splitsPendingSubtitle && !ANSWER_SPLIT_RE.test(plain)) {
-      this.openSplitsSubcategory(plain);
-      return;
+    // Inside Splits, the first paragraph after the "Splits" header (or after
+    // the previous sub-category's 4th question) is the sub-category title.
+    if (inSplits && splitsPendingSubtitle && !ANSWER_SPLIT_RE.test(plain)) {
+      emitCategory(plain);
+      splitsPendingSubtitle = false;
+      continue;
     }
 
-    if (this.categoryKind === 'jackpot') {
+    if (categoryKind === 'jackpot' && jackpot) {
       if (PART_RE.test(plain)) {
         if (ANSWER_SPLIT_RE.test(plain)) {
           const { question, answerRuns } = splitQuestionAnswer(runs);
-          this.jackpotParts.parts.push(question.trim());
-          this.jackpotParts.answerRuns = answerRuns;
-          this.flushJackpot();
+          jackpot.parts.push(question);
+          jackpot.answerRuns = answerRuns;
+          flushJackpot();
         } else {
-          this.jackpotParts.parts.push(plain);
+          jackpot.parts.push(plain);
         }
-        return;
+        continue;
       }
       if (ANSWER_SPLIT_RE.test(plain)) {
         const { answerRuns } = splitQuestionAnswer(runs);
-        this.jackpotParts.answerRuns = answerRuns;
-        this.flushJackpot();
-        return;
+        jackpot.answerRuns = answerRuns;
+        flushJackpot();
+        continue;
       }
-      this.instructions = (this.instructions ? this.instructions + ' ' : '') + plain;
-      return;
+      if (!jackpot.parts.length) { emit(plain); continue; } // instructions
+      adapterIssues.push(makeIssue('docx-stray-text', 'warn',
+        'Unrecognized text inside a Jackpot was skipped.', { snippet: plain.slice(0, 80) }));
+      continue;
     }
 
-    if (this.categoryKind === 'streak') {
+    if (categoryKind === 'streak') {
       if (A_PREFIX_RE.test(plain)) {
         const ansRuns = stripPrefix(runs, A_PREFIX_RE);
-        if (!this.streakBuffer) {
-          const prompt = this.instructions || '';
-          this.instructions = null;
-          this.streakBuffer = { prompt, answers: [ansRuns] };
+        if (!streak) {
+          streak = { prompt: pendingStreakPrompt || '', answers: [ansRuns] };
+          pendingStreakPrompt = null;
         } else {
-          this.streakBuffer.answers.push(ansRuns);
+          streak.answers.push(ansRuns);
         }
-        return;
+        continue;
       }
-      if (!this.streakBuffer) {
-        this.instructions = plain;
-        return;
+      if (!streak) {
+        // The streak's prompt — held back and emitted by flushStreak so the
+        // slot span can be encoded in the numbering.
+        pendingStreakPrompt = plain;
+        continue;
       }
     }
 
     if (ANSWER_SPLIT_RE.test(plain)) {
+      flushStreak(); // a Q-with-ANSWER while a streak buffer is open ends the streak
       const { question, answerRuns } = splitQuestionAnswer(runs);
-      let kind = 'single';
-      if (this.categoryKind === 'jailbreak') kind = 'jailbreak';
-      else if (this.category && /^Set of \d+:\s*Spelling/i.test(this.category)) kind = 'spelling';
-      this.pushQuestion({ question, answerRuns, kind });
-      if (this.inSplits && this.posInCategory >= 4) this.splitsPendingSubtitle = true;
-      return;
+      emitQA(question, answerRuns);
+      if (inSplits && questionsInGroup >= 4) splitsPendingSubtitle = true;
+      continue;
     }
 
-    // Plain paragraph with no ANSWER — usually category instructions, or a
-    // question whose answer is in the next paragraph (mergeContinuations
-    // would have merged those, so this branch is mostly instructions).
-    this.instructions = (this.instructions ? this.instructions + ' ' : '') + plain;
+    // Plain paragraph with no ANSWER. At the top of a category it's the
+    // moderator instructions (the core captures prose between a bold title
+    // and the first question). Mid-category it's unclassifiable — keep it
+    // out of the doc (it would bleed into the previous answer's text) but
+    // don't let it vanish silently.
+    if (questionsInGroup === 0) {
+      emit(plain);
+    } else {
+      adapterIssues.push(makeIssue('docx-stray-text', 'warn',
+        'Unrecognized text was skipped (not a question with an ANSWER:, a category header, or category instructions).',
+        { snippet: plain.slice(0, 80) }));
+    }
   }
+  flushStreak();
+  flushJackpot();
+
+  return { doc: { source: 'docx', lines }, adapterIssues };
 }
 
-export function parseDocxParagraphsToQuestions(paragraphs) {
-  const logical = mergeContinuations(paragraphs);
-  const p = new Parser();
-  for (const runs of logical) p.handleParagraph(runs);
-  p.flushStreak();
-  p.flushJackpot();
-  return p.questions;
+// Parse pre-extracted paragraphs ([{ text, bold }] runs per paragraph).
+export function parseDocxParagraphs(paragraphs) {
+  const { doc, adapterIssues } = docxParagraphsToDoc(paragraphs);
+  const { questions, issues } = parseQuestions(doc);
+  return { questions, issues: [...adapterIssues, ...issues] };
 }
 
 export async function parseDocxBuffer(buffer) {
-  const paragraphs = await extractDocxParagraphs(buffer);
-  return parseDocxParagraphsToQuestions(paragraphs);
+  return parseDocxParagraphs(await extractDocxParagraphs(buffer));
 }

@@ -41,14 +41,14 @@ export function flattenDoc(doc) {
   doc.lines.forEach((line, i) => {
     if (i > 0) {
       const prev = doc.lines[i - 1].source;
-      segments.push({ str: ' ', bold: false, page: prev.page ?? 1, y: prev.y ?? null });
+      segments.push({ str: ' ', bold: false, page: prev.page ?? null, y: prev.y ?? null });
       combined += ' ';
     }
     lineStartPositions.push(combined.length);
     const runs = line.segments && line.segments.length ? line.segments : [{ text: line.text, bold: line.isBold }];
     for (const run of runs) {
       if (!run.text) continue;
-      segments.push({ str: run.text, bold: !!run.bold, page: line.source.page ?? 1, y: line.source.y ?? null });
+      segments.push({ str: run.text, bold: !!run.bold, page: line.source.page ?? null, y: line.source.y ?? null });
       combined += run.text;
     }
   });
