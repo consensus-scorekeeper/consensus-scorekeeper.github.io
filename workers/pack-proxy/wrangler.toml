@@ -1,0 +1,8 @@
+name = "consensus-pack-proxy"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Deploy from this folder:
+#   npx wrangler login      (one-time; opens a browser to authorize)
+#   npx wrangler deploy     (prints the https://<name>.<subdomain>.workers.dev URL)
+# See README.md for the security model and what to paste into pack-browser.js.
