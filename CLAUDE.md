@@ -52,14 +52,26 @@ src/
                           stamps title from TOURNAMENTS[slug], loads results/manifest.json
   tournaments-main.js   ← tournaments/index.html entry: hub list + search filter
   state.js              ← state singleton + reducers + subscribe()
-  loader.js             ← parsePdf / parseDocx / parseTextFile / processZipBuffer / handleZipUpload orchestrators (.docx + .txt share an applyTextPackResult helper)
+  loader.js             ← parsePdf / parseDocx / parseTextFile / processZipBuffer / handleZipUpload
+                          orchestrators; every format lands in one applyParseResult()
+                          (acceptance gate, status line, state.parseIssues, parse report);
+                          zip packs get background per-pack issue annotation
   parser/
     zip.js              ← readZip (optional accept(name) filter), looksLikePdfOrZip
-    pdf-text.js         ← extractRichLinesFromPdf (pdf.js → lines/segments/posMap)
-    questions.js        ← parseQuestions + cleanTrailing + extractRichRange + richToHtml
+    rich-doc.js         ← the RichDoc IR every adapter emits: makeLine + flattenDoc
+    questions.js        ← THE universal parsing core: parseQuestions(doc) → { questions,
+                          issues } + computeTotalSlots + cleanTrailing + extractRichRange
+                          + richToHtml
+    diagnostics.js      ← makeIssue + analyzeQuestions (whole-pack checks) + issueSlotSet
+                          + summarizeIssues + shouldNudgeFormatPack (pure, DOM-free)
+    pdf-text.js         ← pdf adapter: extractRichDocFromPdf (pdf.js → RichDoc;
+                          bold = second-most-used font)
     docx-text.js        ← extractDocxParagraphs (zip → word/document.xml → runs[])
-    docx-questions.js   ← parseDocxBuffer + inferStreakSlotCount (JS port of scripts/parse_consensus_docx.py)
-    text-pack.js        ← parseTextPack: normalize a plain-text pack into the rich-segment shape parseQuestions consumes
+    docx-questions.js   ← docx adapter: transpiles paragraphs into canonical numbered
+                          lines (sequential nums; streak spans = number gaps via
+                          inferStreakSlotCount) and runs them through parseQuestions
+    text-pack.js        ← txt adapter: strict line classifier for the authored format,
+                          emits line-numbered txt-* issues, feeds parseQuestions
   game/
     streaks.js          ← rebuildStreakGroups
     jailbreak.js        ← rebuildJailbreakLocks
@@ -94,6 +106,8 @@ src/
     format-pack.js      ← "Format your own pack" modal: fills assets/text-pack-llm-prompt.txt
                           with user-pasted raw questions, copies prompt to clipboard, then
                           loads the LLM's reformatted output via parseTextFile
+    parse-report.js     ← renderParseReport: the "suspected parsing issues" panel under
+                          the upload status (reads state.parseIssues)
   util/
     escape.js           ← escapeHtml, csvEscape
     csv.js              ← buildResultsCsv, buildResultsFilename (used by exportCsv)
@@ -108,13 +122,14 @@ assets/
   tutorial-pack.pdf     ← bundled pack the tutorial sandbox loads
   text-pack-llm-prompt.txt ← LLM reformatting prompt the Format-pack modal fills in
   sample_txt_pack.txt   ← full 100-slot .txt pack; fixture for tests/text-pack.test.js
-scripts/                ← Python helpers; run from anywhere (paths use __file__)
+scripts/                ← helpers; run from anywhere (paths use __file__)
   serve.py is at root   ← local dev server (port 8000); also /proxy/ for consensustrivia.com
   scrape_packs.py       ← regenerates ui/pack-browser.js's PACK_CATALOG
   generate_fake_tournament.py  ← writes a round-robin into tournaments/<slug>/results/
   update_manifests.py          ← rewrites manifest.json in every tournaments/*/results/ folder
-  parse_consensus_docx.py      ← offline .docx → JSON/text dump; reference implementation
-                                  for src/parser/docx-questions.js — keep the two in sync
+  generate-golden.mjs          ← Node: regenerates tests/fixtures/golden/*.json (the PDF
+                                  parse-regression fixtures) — rerun ONLY when a parse-output
+                                  change is intended, and review the JSON diff
   process-submission.mjs       ← Node (not Python): drives the results-submission Action;
                                   imports src/util modules directly ("type": "module")
 .github/
@@ -214,62 +229,88 @@ They're stored in `consensus-custom-tournaments-v1`
   pages — `tournaments-main.js` / `stats-main.js` import the built-in
   registry directly, and custom entries have no `results/` folder.
 
-## Packet upload — `.pdf` vs `.zip` vs `.docx` vs `.txt`
+## Packet parsing — one core, thin adapters, structured diagnostics
 
-The file picker (`#pdf-input`, `accept=".pdf,.zip,.docx,.txt"`) dispatches
-in `src/main.js` by extension:
+Every upload format funnels through the **one** parsing core,
+`parseQuestions(doc)` in `src/parser/questions.js`. The core consumes a
+**RichDoc** (`src/parser/rich-doc.js`): a flat list of lines, each with
+plain text, rich `{ text, bold }` runs, an `isBold` flag (drives category
+detection), and provenance (`page`/`y` for PDFs, `lineNo` for .txt). It
+returns `{ questions, issues }` — parsing is *lenient* (a rough pack
+still loads and plays) but every silent failure point emits a structured
+issue instead of vanishing.
 
-- **`.pdf`** → `parsePdf` (`loader.js`). pdf.js extracts rich text with
-  font + position info; `parseQuestions` turns it into the canonical
-  question shape; `state.pdfBytes` is saved so the inline PDF viewer can
-  render pages.
-- **`.zip`** → `processZipBuffer` → `handleZipUpload`. `readZip` walks
-  the central directory, the dropdown gets one entry per PDF, and the
-  first selection auto-loads. The zip path is PDFs-only at the moment.
-- **`.docx`** → `parseDocx` (`loader.js`). `extractDocxParagraphs`
-  reads `word/document.xml` out of the docx (which is itself a zip) and
-  yields `[{ text, bold }]` runs; `parseDocxBuffer` runs the same state
-  machine as `scripts/parse_consensus_docx.py` and emits questions in
-  the PDF-parser's shape.
-- **`.txt`** → `parseTextFile` (`loader.js`). `parseTextPack` normalizes
-  the text into a synthetic line-list with bold flags and feeds it to
-  the PDF parser's `parseQuestions`, so the same propagation /
-  streakRange logic applies. The "Format pack" modal
-  (`ui/format-pack.js`) lets users generate this format from raw input
-  via an LLM prompt fetched from `assets/text-pack-llm-prompt.txt`.
+The file picker (`#pdf-input`, `accept=".pdf,.zip,.docx,.txt"`)
+dispatches in `src/main.js` by extension to a format **adapter**:
 
-`parseDocx` and `parseTextFile` share an `applyTextPackResult({
-filename, parseFn, parsingMessage, errorPrefix })` helper that handles
-the post-parse work (slot count, status message, persistence). Both
-clear `state.pdfBytes` and call `clearSavedPdfBytes()` so the inline
-viewer hides itself for non-PDF packs and a reload doesn't resurrect a
-stale PDF.
+- **`.pdf`** → `parsePdf` (`loader.js`) → `extractRichDocFromPdf`
+  (`parser/pdf-text.js`). pdf.js text items are re-sorted spatially,
+  grouped into lines, and bold is inferred as the second-most-used font.
+  Question `pageNum`/`yPos` drive the inline viewer's scroll-to-question.
+  `state.pdfBytes` is saved so the viewer can render pages. **PDF packs
+  from consensustrivia.com are the most important input** — any change
+  near the core or pdf adapter must keep `tests/golden-pdf.test.js`
+  green (byte-exact fixtures for two real packs; regenerate deliberately
+  with `node scripts/generate-golden.mjs`).
+- **`.zip`** → `processZipBuffer`. The dropdown gets one entry per PDF;
+  the first auto-loads, and the rest parse in the background so each
+  dropdown entry shows a per-pack verdict ("Pack 3.pdf — 2 warnings").
+  Cached parses are reused on selection; a new upload abandons the old
+  annotation loop (generation counter).
+- **`.docx`** → `parseDocx` → `parseDocxBuffer`
+  (`parser/docx-questions.js`). Docx packets have no question numbers,
+  so the adapter *transpiles* paragraphs into canonical numbered lines:
+  sequential numbers, `A:` answer lines, bold category headers, and
+  streak spans encoded as number gaps using
+  `inferStreakSlotCount(prompt, answerCount)` (prompt cap "up to all N"
+  beats raw answer count; slots = `max(1, ceil(cap / 2))` since streak
+  answers are worth half points). The core then handles everything else
+  (jackpot propagation, splits naming, answerHtml) exactly as for PDFs.
+- **`.txt`** → `parseTextFile` → `parseTextPack`
+  (`parser/text-pack.js`). This is the **authored format** — the one the
+  "Format pack" modal's LLM prompt (`assets/text-pack-llm-prompt.txt`)
+  emits — so its adapter is strict: it classifies every line and reports
+  precise, line-numbered issues (`txt-question-without-answer`,
+  `txt-orphan-answer`, `txt-number-regression`,
+  `txt-suspected-category`). `assets/sample_txt_pack.txt` must parse
+  with ZERO issues (canary test in `tests/text-pack.test.js`) — if it
+  doesn't, the prompt spec and the parser have drifted apart.
 
-All four upload paths produce identical-shape question records, so
-everything downstream (`padQuestionsToSlots`, `startGame`,
-`rebuildStreakGroups`, scoring, CSV export) doesn't know or care which
-upload path produced them.
+All paths land in loader.js's single `applyParseResult()`: the >=10
+question acceptance gate, the status line (with issue count), writing
+`state.parseIssues`, rendering the parse report, and persistence. Thrown
+errors become a single `exception` issue so the report is never stale.
+Non-PDF paths clear `state.pdfBytes` + `clearSavedPdfBytes()` so the
+inline viewer hides and a reload can't resurrect a stale PDF.
 
-### Streak-slot inference (docx-only)
+### Parse diagnostics
 
-In a PDF packet the streak's slot span is encoded by the gap between
-the streak's question number and the next question's number (e.g.
-`85.` … `90.` → slots 85–89). The `.docx` format has no question
-numbers, so `inferStreakSlotCount(prompt, answerCount)` reads it from
-the streak's prompt:
+`src/parser/diagnostics.js` is pure and DOM-free. Issue shape:
+`{ severity: 'error'|'warn', code, message, slot?, slots?: [a,b],
+lineNo?, snippet? }`. The core emits issues at its failure points
+(`duplicate-number`, `unparsed-answer`, `jackpot-unresolved`,
+`empty-question`, `out-of-range-number`); adapters add format-specific
+ones (`pdf-no-bold-font`, `txt-*`, `docx-*`); `analyzeQuestions()` adds
+whole-pack checks after any parse (`too-few-questions`,
+`slot-count-mismatch`, `numbering-gap`, `no-categories`,
+`streak-span-suspicious`, `single-answer-streak`).
 
-1. Look for `up to (all) N` / `name N` / `give N` (digit or
-   `one`..`twelve`) in the prompt — writers sometimes list more
-   accepted answers than the cap allows, so the prompt is more
-   authoritative than the `A:` count.
-2. Fall back to `answerCount` if no cap is found.
-3. Return `max(1, ceil(cap / 2))` — each streak answer is worth half
-   points, so `N` accepted answers ≈ `N/2` regular-question slots.
+Issues live in `state.parseIssues` (persisted inside
+`consensus-state-v1`) and surface in three places:
 
-If you change this heuristic, update both
-`src/parser/docx-questions.js` and `scripts/parse_consensus_docx.py`
-together. Both have a `CAP_RE` and an `inferStreakSlotCount` you can
-keep in lockstep.
+1. **Setup screen**: `ui/parse-report.js` renders the expandable
+   "Suspected parsing issues" panel under `#pdf-status`; when
+   `shouldNudgeFormatPack()` (any error, or 3+ warnings) it also shows a
+   pointer to the Format-pack flow.
+2. **In-game**: sidebar slot buttons get a ⚠ flag
+   (`issueSlotSet(state.parseIssues)`) and `#q-parse-warning` in the
+   question panel explains the current slot's issues.
+3. **Zip dropdown**: per-pack error/warning counts (see above).
+
+All paths produce identical-shape question records, so everything
+downstream (`padQuestionsToSlots`, `startGame`, `rebuildStreakGroups`,
+scoring, CSV export) doesn't know or care which upload path produced
+them.
 
 ## Adding a new tournament
 
@@ -438,7 +479,16 @@ Tests live in `tests/*.test.js`. They import from `../src/main.js` (which
 re-exports the public surface) so a future module split inside `src/` is
 transparent to tests. Notable test files:
 
-- `parse-questions.test.js`        — synthetic PDF input → parsed questions
+- `golden-pdf.test.js`             — THE PDF-regression tripwire: parses two real packs
+                                     (via the pdfjs-dist devDependency, pinned to the CDN
+                                     version) and diffs byte-exactly against
+                                     `tests/fixtures/golden/*.json`; regenerate only
+                                     deliberately with `node scripts/generate-golden.mjs`
+- `parse-questions.test.js`        — synthetic RichDoc input → parsed questions
+- `diagnostics.test.js`            — analyzeQuestions checks, core issue emission, helpers
+- `docx-questions.test.js`         — inferStreakSlotCount + synthetic-paragraph transpiler
+                                     cases + a file-gated suite over a real local packet
+- `parse-report.test.js`           — the suspected-parsing-issues panel DOM
 - `state-mutations.test.js`        — reducer correctness
 - `export-csv.test.js`             — CSV layout snapshot (keep multi-section format intact)
 - `parse-results-csv.test.js`      — round-trip of the CSV exporter
@@ -446,8 +496,9 @@ transparent to tests. Notable test files:
 - `tournament-fixtures.test.js`    — runs every CSV in `tournaments/*/results/`
                                      through parse + aggregate, plus asserts each manifest
                                      stays in sync with its folder
-- `text-pack.test.js`              — .txt pack parsing; the full-pack cases read the
-                                     `assets/sample_txt_pack.txt` fixture
+- `text-pack.test.js`              — .txt pack parsing incl. the ZERO-issue canary on
+                                     `assets/sample_txt_pack.txt` and the line-numbered
+                                     txt-* issue cases
 - `roster-text.test.js`            — plain-text roster format: parse/serialize round-trip,
                                      error rules, slugifyName
 - `custom-tournaments.test.js`     — localStorage CRUD, slug collisions, merged registry
