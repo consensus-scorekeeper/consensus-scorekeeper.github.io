@@ -14,7 +14,7 @@ export async function parsePdfFixture(filePath) {
   const pdf = await getDocument({ data: new Uint8Array(buf), useSystemFonts: true, verbosity: 0 }).promise;
   try {
     const { doc } = await extractRichDocFromPdf(pdf);
-    return parseQuestions(doc);
+    return parseQuestions(doc).questions;
   } finally {
     await pdf.destroy();
   }

@@ -35,6 +35,7 @@ export function saveState() {
       answeredQuestions: [...state.answeredQuestions],
       streakScoring: state.streakScoring,
       packName: state.packName,
+      parseIssues: state.parseIssues,
       gameActive: isGameVisible(),
       inlinePdfHidden: state.inlinePdfHidden,
     };

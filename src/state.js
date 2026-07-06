@@ -17,6 +17,10 @@ export const state = {
   answeredQuestions: new Set(),
   zipPacks: null,
   packName: null,
+  // Suspected parsing issues from the last pack load (see
+  // parser/diagnostics.js). Drives the parse report on the setup screen and
+  // the per-slot warning flags in-game.
+  parseIssues: [],
   pdfBytes: null,
   pdfViewer: { doc: null, currentPage: 1, inlinePage: null },
   inlinePdfHidden: false,

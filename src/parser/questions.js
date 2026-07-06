@@ -65,9 +65,21 @@ export function richToHtml(segments) {
   }).join('');
 }
 
+// Total question slots a parsed list covers (streaks span multiple slots).
+export function computeTotalSlots(questions) {
+  return questions.reduce((sum, q) => {
+    if (q.streakRange) return sum + (q.streakRange.end - q.streakRange.start + 1);
+    return sum + 1;
+  }, 0);
+}
+
+// Returns { questions, issues }. Issues follow the shape documented in
+// parser/diagnostics.js (constructed inline here to avoid an import cycle —
+// diagnostics.js imports computeTotalSlots from this module).
 export function parseQuestions(doc) {
   const lines = doc.lines;
   const { combined, segments: richSegments, posMap, lineStartPositions } = flattenDoc(doc);
+  const issues = [];
   // Step 1: Build category map using bold detection from PDF fonts
   // A bold line that isn't a question, structural marker, answer/prompt line,
   // or bare number is a category title.
@@ -171,6 +183,11 @@ export function parseQuestions(doc) {
     const numStartPos = m.index;
     if (num >= 1 && num <= 100 && isLineStart(numStartPos)) {
       questionStarts.push({ num, pos: numStartPos });
+    } else if (num > 100 && isLineStart(numStartPos)) {
+      issues.push({
+        code: 'out-of-range-number', severity: 'warn',
+        message: `Found "${num}." at a line start — question numbers above 100 are ignored.`,
+      });
     }
   }
 
@@ -286,7 +303,14 @@ export function parseQuestions(doc) {
         }
 
         if (questionText.length > 1) {
-          if (!answerPlain) { answerPlain = '(answer not parsed)'; answerHtml = '<i>(answer not parsed)</i>'; }
+          if (!answerPlain) {
+            answerPlain = '(answer not parsed)';
+            answerHtml = '<i>(answer not parsed)</i>';
+            issues.push({
+              code: 'unparsed-answer', severity: 'warn', slot: start.num,
+              message: `Question ${start.num} has an "A:" marker but its answer text could not be extracted.`,
+            });
+          }
           const isStreakQ = !!(catInfo && catInfo.category && /streak/i.test(catInfo.category));
           // For streaks, calculate the range of question numbers this streak covers
           // (from this Q's number to next Q's number - 1)
@@ -308,32 +332,49 @@ export function parseQuestions(doc) {
             pageNum: qPageNum,
             yPos: qYPos,
           });
+        } else {
+          issues.push({
+            code: 'empty-question', severity: 'warn', slot: start.num,
+            message: `Question ${start.num} was found but its text is empty — it was dropped.`,
+          });
         }
       }
     } else {
       const qMatch = segment.match(/^\d{1,3}\.\s+(.*)/);
-      if (qMatch) {
-        let questionText = cleanTrailing(qMatch[1].trim().replace(/\s+/g, ' '));
-        if (questionText.length > 1) {
-          questions.push({
-            num: start.num,
-            question: questionText,
-            answer: '(see final part for answer)',
-            answerHtml: '<i>(see final part for answer)</i>',
-            category: catInfo ? catInfo.category : null,
-            posInCategory: catInfo ? catInfo.posInCategory : null,
-            categoryInstructions: catInfo ? (catInfo.categoryInstructions || null) : null,
-            pageNum: qPageNum,
-            yPos: qYPos,
-          });
-        }
+      if (qMatch && cleanTrailing(qMatch[1].trim().replace(/\s+/g, ' ')).length > 1) {
+        const questionText = cleanTrailing(qMatch[1].trim().replace(/\s+/g, ' '));
+        questions.push({
+          num: start.num,
+          question: questionText,
+          answer: '(see final part for answer)',
+          answerHtml: '<i>(see final part for answer)</i>',
+          category: catInfo ? catInfo.category : null,
+          posInCategory: catInfo ? catInfo.posInCategory : null,
+          categoryInstructions: catInfo ? (catInfo.categoryInstructions || null) : null,
+          pageNum: qPageNum,
+          yPos: qYPos,
+        });
+      } else {
+        issues.push({
+          code: 'empty-question', severity: 'warn', slot: start.num,
+          message: `Question ${start.num} was found but its text is empty — it was dropped.`,
+        });
       }
     }
   }
   const seen = new Set();
   const unique = [];
   for (const q of questions) {
-    if (!seen.has(q.num)) { seen.add(q.num); unique.push(q); }
+    if (!seen.has(q.num)) {
+      seen.add(q.num);
+      unique.push(q);
+    } else {
+      issues.push({
+        code: 'duplicate-number', severity: 'warn', slot: q.num,
+        snippet: q.question.slice(0, 80),
+        message: `Question ${q.num} appears more than once — the duplicate was dropped.`,
+      });
+    }
   }
   unique.sort((a, b) => a.num - b.num);
 
@@ -348,7 +389,13 @@ export function parseQuestions(doc) {
         break;
       }
     }
+    if (unique[i].answer === '(see final part for answer)') {
+      issues.push({
+        code: 'jackpot-unresolved', severity: 'error', slot: unique[i].num,
+        message: `Question ${unique[i].num} is a multi-part clue whose final answer was never found — it has no answer.`,
+      });
+    }
   }
 
-  return unique;
+  return { questions: unique, issues };
 }

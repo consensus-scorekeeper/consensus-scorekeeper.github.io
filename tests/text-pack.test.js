@@ -7,7 +7,7 @@ import { parseTextPack } from '../src/parser/text-pack.js';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 describe('parseTextPack — basic category + questions', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Set of 4: Famous Authors
 1. Who wrote Hamlet?
 A: Shakespeare
@@ -32,7 +32,7 @@ A: Joyce
 });
 
 describe('parseTextPack — accepts indented "a." answer marker', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Set of 2: Misc
 1. Q one?
     a. one
@@ -47,7 +47,7 @@ describe('parseTextPack — accepts indented "a." answer marker', () => {
 });
 
 describe('parseTextPack — streak with multiple A: answers', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Streak
 10. Name up to 8 cities.
 A: Boston
@@ -70,7 +70,7 @@ A: hi
 });
 
 describe('parseTextPack — jackpot answer propagation', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Jackpot
 14. Clue 1.
 15. Clue 2.
@@ -85,7 +85,7 @@ A: final
 });
 
 describe('parseTextPack — splits', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Splits: Gothic & Mountains
 Gothic Literature
 50. Who wrote Frankenstein?
@@ -106,7 +106,7 @@ A: Karakoram
 });
 
 describe('parseTextPack — instructions captured per category', () => {
-  const qs = parseTextPack(
+  const { questions: qs } = parseTextPack(
     `Set of 3: Before and After
 Each answer is two phrases joined by a shared word.
 60. Q text
@@ -120,7 +120,7 @@ A: Answer text
 
 describe('parseTextPack — full sample_txt_pack.txt fixture', () => {
   const text = readFileSync(join(__dirname, '..', 'assets', 'sample_txt_pack.txt'), 'utf8');
-  const qs = parseTextPack(text);
+  const { questions: qs } = parseTextPack(text);
 
   it('parses every numbered question + both streaks', () => {
     const nums = qs.map(q => q.num);

@@ -64,6 +64,7 @@ import { pushScoreboardUpdate, popOutScoreboard } from './ui/scoreboard-popout.j
 import { setupPackBrowser } from './ui/pack-browser.js';
 import { startTutorialGame } from './ui/tutorial.js';
 import { setupFormatPack, formatPackActions } from './ui/format-pack.js';
+import { renderParseReport } from './ui/parse-report.js';
 import { setupRosterManager, rosterManagerActions } from './ui/roster-manager.js';
 
 // ==================== UI INIT ====================
@@ -146,8 +147,10 @@ function loadState() {
     }
     state.streakScoring = ss;
     state.packName = snap.packName || null;
+    state.parseIssues = snap.parseIssues || [];
     state.inlinePdfHidden = !!snap.inlinePdfHidden;
     rebuildStreakGroups();
+    renderParseReport();
 
     const pdfBytes = loadPdfBytes();
     if (pdfBytes) state.pdfBytes = pdfBytes;

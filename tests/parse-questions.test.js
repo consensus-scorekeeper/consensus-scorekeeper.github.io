@@ -25,7 +25,7 @@ describe('parseQuestions — basic Set of 4 category', () => {
     { text: '4. Who wrote Ulysses?' },
     { text: 'A: Joyce' },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
 
   it('finds 4 questions', () => expect(qs).toHaveLength(4));
   it('numbers them 1..4', () => expect(qs.map((q) => q.num)).toEqual([1, 2, 3, 4]));
@@ -59,7 +59,7 @@ describe('parseQuestions — streak round', () => {
     { text: '90. Different question.' },
     { text: 'A: Foo' },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
 
   it('finds the streak question', () => {
     const streak = qs.find((q) => q.num === 85);
@@ -87,7 +87,7 @@ describe('parseQuestions — splits', () => {
     { text: '53. K2 is in which range?' },
     { text: 'A: Karakoram' },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
 
   it('labels first sub-category as "Splits 1: ..."', () => {
     expect(qs[0].category).toBe('Splits 1: Gothic Literature');
@@ -106,7 +106,7 @@ describe('parseQuestions — captures category instructions', () => {
     { text: '60. Q text' },
     { text: 'A: Answer text' },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
   it('attaches the prose between category title and Q1 as instructions', () => {
     expect(qs[0].categoryInstructions).toBe('Each answer is two phrases joined by a shared word.');
   });
@@ -123,7 +123,7 @@ describe('parseQuestions — rejects mid-sentence "N." matches', () => {
     { text: '2. What is sin of pi?' },
     { text: 'A: 0' },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
   it('does not produce a spurious Q3 from "over 3."', () => {
     expect(qs.map((q) => q.num)).toEqual([1, 2]);
   });
@@ -135,7 +135,7 @@ describe('parseQuestions — stores page + y from rich segment', () => {
     { text: '1. Q?', page: 2, y: 480 },
     { text: 'A: A', page: 2, y: 470 },
   ]);
-  const qs = parseQuestions(doc);
+  const { questions: qs } = parseQuestions(doc);
   it('records pageNum and yPos', () => {
     expect(qs[0].pageNum).toBe(2);
     expect(qs[0].yPos).toBe(480);
