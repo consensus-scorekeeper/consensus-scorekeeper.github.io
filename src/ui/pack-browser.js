@@ -75,18 +75,15 @@ function packZipUrl(t) {
 
 async function fetchWithFallback(url, statusEl) {
   const ATTEMPT_TIMEOUT_MS = 12000;
-  const directAttempt = { label: 'direct', fn: (signal) => fetch(url, { signal }) };
-  const proxyAttempts = CORS_PROXIES.map((makeProxy) => ({
-    label: 'relay',
-    fn: (signal) => fetch(makeProxy(url), { signal }),
-  }));
-  const attempts = [directAttempt, ...proxyAttempts];
-  for (const attempt of attempts) {
-    if (statusEl) statusEl.textContent = `Downloading via ${attempt.label}...`;
+  // No direct attempt: consensustrivia.com sends no CORS header, so a plain
+  // cross-origin fetch can never succeed and only logs a console error. Every
+  // attempt goes through a relay (our Worker, then public proxies).
+  for (const makeProxy of CORS_PROXIES) {
+    if (statusEl) statusEl.textContent = 'Downloading via relay...';
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ATTEMPT_TIMEOUT_MS);
     try {
-      const r = await attempt.fn(ctrl.signal);
+      const r = await fetch(makeProxy(url), { signal: ctrl.signal });
       if (!r.ok) continue;
       const buffer = await r.arrayBuffer();
       if (looksLikePdfOrZip(buffer)) return buffer;
