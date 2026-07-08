@@ -19,7 +19,12 @@
 //   5. Edge caching (cf.cacheEverything) so repeat downloads of the same pack
 //      barely touch consensustrivia.com and stay fast.
 
-const ALLOWED_HOSTS = new Set(['www.consensustrivia.com', 'consensustrivia.com']);
+const ALLOWED_HOSTS = new Set([
+  'www.consensustrivia.com', 'consensustrivia.com',
+  // Gradwrite serves packs with open CORS, so the browser normally fetches
+  // them directly — the relay is only its fallback path.
+  'www.gradwritetrivia.org', 'gradwritetrivia.org',
+]);
 
 // Soft allowlist of page origins permitted to use the relay. Add a mirror's
 // origin here if you host the site elsewhere. Leave the array empty to disable

@@ -46,8 +46,10 @@ The Worker URL is discoverable in our public source. These layers keep that from
 mattering:
 
 - **Upstream host allowlist** (`ALLOWED_HOSTS`) — the Worker will *only* fetch
-  `consensustrivia.com`. It can never be repurposed as a general open proxy for
-  arbitrary sites. Worst case it's a free CDN for consensustrivia's public packs.
+  `consensustrivia.com` and `gradwritetrivia.org`. It can never be repurposed as
+  a general open proxy for arbitrary sites. Worst case it's a free CDN for those
+  sites' public packs. (Gradwrite serves packs with open CORS, so the browser
+  normally fetches them directly; the Worker is only its fallback.)
 - **Path allowlist** — only `.pdf`/`.zip` targets are relayed.
 - **Origin/Referer allowlist** (`ALLOWED_ORIGINS`) — a soft gate so other
   websites can't casually embed the relay from a browser. Add a mirror's origin

@@ -16,7 +16,12 @@ from pathlib import Path
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
 ROOT = Path(__file__).resolve().parent
 PROXY_PREFIX = "/proxy/"
-ALLOWED_HOSTS = {"www.consensustrivia.com", "consensustrivia.com"}
+ALLOWED_HOSTS = {
+    "www.consensustrivia.com", "consensustrivia.com",
+    # Gradwrite serves packs with open CORS, so the browser normally fetches
+    # them directly — this proxy is only its fallback path.
+    "www.gradwritetrivia.org", "gradwritetrivia.org",
+}
 
 
 class Handler(http.server.SimpleHTTPRequestHandler):

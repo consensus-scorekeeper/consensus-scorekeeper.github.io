@@ -98,10 +98,13 @@ src/
     pdf-viewer.js       ← inline + fullscreen pack viewer: pdf.js canvas for PDFs,
                           rendered state.packDoc text for .docx/.txt packs
     scoreboard-popout.js ← BroadcastChannel + popout HTML template
-    pack-browser.js     ← PACK_CATALOG + renderBrowser + fetchWithFallback (relay
-                          chain: serve.py /proxy/ (local dev) → our Cloudflare
-                          Worker (PACK_PROXY_BASE, source in workers/pack-proxy/)
-                          → public CORS proxies → manual download-it-yourself link)
+    pack-browser.js     ← PACK_CATALOG (consensustrivia, scraper-generated) +
+                          GRADWRITE_CATALOG (gradwritetrivia.org, hand-maintained)
+                          + renderBrowser + fetchWithFallback (direct fetch when
+                          the source sends CORS (gradwrite) → serve.py /proxy/
+                          (local dev) → our Cloudflare Worker (PACK_PROXY_BASE,
+                          source in workers/pack-proxy/) → public CORS proxies
+                          → manual download-it-yourself link)
     keybinds.js         ← global keydown listener
     splitter.js         ← attachSplitter
     dev-tools.js        ← reparseCurrentPdf, applyCustomAward, populateCustomAward
@@ -547,11 +550,20 @@ manifest can't silently drift.
 
 ## Regenerating the pack catalog
 
-`PACK_CATALOG` lives in `src/ui/pack-browser.js` and drives the "browse
-packs from consensustrivia.com" UI. Each entry encodes the level, season,
-tournament name, URL slug (`dir`), file-name prefix, and number of packs.
-The site grows over time — championships in particular accumulate packs
-past the original count of 10 — so the catalog needs occasional refreshing.
+`PACK_CATALOG` lives in `src/ui/pack-browser.js` and drives the
+consensustrivia.com half of the "browse packs" UI. Each entry encodes the
+level, season, tournament name, URL slug (`dir`), file-name prefix, and
+number of packs. The site grows over time — championships in particular
+accumulate packs past the original count of 10 — so the catalog needs
+occasional refreshing.
+
+The scraper only touches consensustrivia.com. `GRADWRITE_CATALOG` (same
+file) is the hand-maintained list of gradwritetrivia.org tournaments — a
+deliberately separate const so pasting fresh scraper output over
+`PACK_CATALOG` can't wipe it. Update it by hand against
+<https://gradwritetrivia.org/Resources/Packs> (URL scheme:
+`Resources/Packs/T<n>/<filePrefix>-Pack-<n>.pdf` + `-All-Packs.zip`;
+non-numbered extras like `XL1` go in `extraPacks`).
 
 `scripts/scrape_packs.py` walks the two index pages
 (`/post-secondary/packs.html`, `/high-school/packs.html`), follows each
@@ -610,8 +622,11 @@ to look.
 ## Pack downloads (CORS relay)
 
 consensustrivia.com serves its packs with **no CORS header**, so no
-deployment of the site can `fetch()` them directly — every download goes
-through a relay. `fetchWithFallback` in `src/ui/pack-browser.js` walks a
+deployment of the site can `fetch()` them directly — every consensus
+download goes through a relay. (gradwritetrivia.org sends
+`Access-Control-Allow-Origin: *`, so `GRADWRITE_CATALOG` entries carry
+`directCors: true` and are fetched directly, with the relay chain as
+their fallback.) `fetchWithFallback` in `src/ui/pack-browser.js` walks a
 chain of attempts in order:
 
 1. `serve.py`'s `/proxy/` (local dev only),
