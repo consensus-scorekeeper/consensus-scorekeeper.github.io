@@ -129,6 +129,130 @@ describe('parseQuestions — rejects mid-sentence "N." matches', () => {
   });
 });
 
+describe('parseQuestions — category titles with a trailing writer tag', () => {
+  // RenWrite-style packs credit writers in the body font at the end of
+  // category and answer lines ("Double Jump <JC>"), so a title line isn't
+  // uniformly bold and would previously be missed entirely.
+  const taggedTitle = (title, tag) =>
+    makeLine(`${title} ${tag}`, {
+      segments: [{ text: `${title} `, bold: true }, { text: tag, bold: false }],
+      isBold: false,
+      page: 1,
+      y: 700,
+    });
+  const doc = {
+    source: 'test',
+    lines: [
+      taggedTitle('Double Jump', '<JC>'),
+      makeLine('1. First question?', { page: 1, y: 680 }),
+      makeLine('A: alpha <IR>', { page: 1, y: 660 }),
+      makeLine('2. Second question?', { page: 1, y: 640 }),
+      makeLine('A: beta', { page: 1, y: 620 }),
+      makeLine('Set of 1: Tagged Bold Title <IR>', { isBold: true, page: 1, y: 600 }),
+      makeLine('3. Third question?', { page: 1, y: 580 }),
+      makeLine('A: gamma', { page: 1, y: 560 }),
+    ],
+  };
+  const { questions: qs } = parseQuestions(doc);
+
+  it('recognizes the bold-except-tag line as a category', () => {
+    expect(qs[0].category).toBe('Double Jump');
+    expect(qs[1].category).toBe('Double Jump');
+  });
+  it('strips the tag from a fully bold title too', () => {
+    expect(qs[2].category).toBe('Set of 1: Tagged Bold Title');
+  });
+  it('strips writer tags from answers', () => {
+    expect(qs[0].answer).toBe('alpha');
+  });
+  it('does not bleed the next tagged title into the prior answer', () => {
+    expect(qs[1].answer).toBe('beta');
+  });
+});
+
+describe('parseQuestions — non-bold prose ending in a tag is not a category', () => {
+  const doc = {
+    source: 'test',
+    lines: [
+      makeLine('Set of 2: Real Category', { isBold: true }),
+      makeLine('1. Q one?'),
+      makeLine('A: one'),
+      makeLine('Notes from the editor <IR>'), // fully non-bold — must not become a category
+      makeLine('2. Q two?'),
+      makeLine('A: two'),
+    ],
+  };
+  const { questions: qs } = parseQuestions(doc);
+  it('keeps the previous category', () => {
+    expect(qs[1].category).toBe('Set of 2: Real Category');
+  });
+});
+
+describe('parseQuestions — next title partially eaten by cleanTrailing still strips', () => {
+  // "Linked Set of 5" bleeding into the prior answer: cleanTrailing's
+  // "Set of N" pattern eats only " Set of 5", stranding "Linked" at the end
+  // of the answer unless the title is tried on the uncleaned text first.
+  const doc = {
+    source: 'test',
+    lines: [
+      makeLine('Set of 1: Books', { isBold: true }),
+      makeLine('1. Which dystopia quotes The Tempest?'),
+      makeLine('A: Brave New World'),
+      makeLine('Linked Set of 5', { isBold: true }),
+      makeLine('2. Practice of map-making?'),
+      makeLine('A: cartography'),
+    ],
+  };
+  const { questions: qs } = parseQuestions(doc);
+  it('strips the full next-category title from the answer', () => {
+    expect(qs[0].answer).toBe('Brave New World');
+  });
+  it('assigns the new category to the following question', () => {
+    expect(qs[1].category).toBe('Linked Set of 5');
+  });
+});
+
+describe('parseQuestions — Gradwrite-style Pyramid (bare number + unnumbered parts)', () => {
+  // A Pyramid is a Jackpot-style clue chain written as a bare "11." line
+  // above unnumbered "Part N:" lines, with the next question at 14 — the
+  // pack's numbering gives the pyramid slots 11–13. The parts must be split
+  // across the gap (last slot absorbs the extras) and all share the answer.
+  const doc = buildDoc([
+    { text: 'Set of 1: Warmup', isBold: true },
+    { text: '10. Who wrote Twilight?' },
+    { text: 'A: Stephanie Meyer' },
+    { text: 'Pyramid', isBold: true },
+    { text: '11.' },
+    { text: 'Part 1: Hardest clue about a Norse god?' },
+    { text: 'Part 2: This god fights Garmr at Ragnarok.' },
+    { text: 'Part 3: This god lost a hand to Fenrir.' },
+    { text: 'Part 4: Tuesday is named after him.' },
+    { text: 'A: Tyr' },
+    { text: 'Set of 1: After', isBold: true },
+    { text: '14. Largest US county by population?' },
+    { text: 'A: Los Angeles County' },
+  ]);
+  const { questions: qs } = parseQuestions(doc);
+
+  it('covers slots 11-13 with the Pyramid category', () => {
+    const nums = qs.map((q) => q.num);
+    expect(nums).toEqual([10, 11, 12, 13, 14]);
+    for (const n of [11, 12, 13]) expect(qs.find((q) => q.num === n).category).toBe('Pyramid');
+  });
+  it('splits parts one per slot, last slot absorbing the extras', () => {
+    expect(qs.find((q) => q.num === 11).question).toBe('Part 1: Hardest clue about a Norse god?');
+    expect(qs.find((q) => q.num === 12).question).toBe('Part 2: This god fights Garmr at Ragnarok.');
+    expect(qs.find((q) => q.num === 13).question).toBe(
+      'Part 3: This god lost a hand to Fenrir. Part 4: Tuesday is named after him.');
+  });
+  it('shares the answer across all pyramid slots', () => {
+    for (const n of [11, 12, 13]) expect(qs.find((q) => q.num === n).answer).toBe('Tyr');
+  });
+  it('does not bleed the Pyramid title into the previous answer', () => {
+    expect(qs.find((q) => q.num === 10).answer).toBe('Stephanie Meyer');
+  });
+});
+
 describe('parseQuestions — stores page + y from rich segment', () => {
   const doc = buildDoc([
     { text: 'Set of 1: P', isBold: true, page: 2, y: 500 },

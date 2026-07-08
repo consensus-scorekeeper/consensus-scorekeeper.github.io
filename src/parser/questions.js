@@ -16,6 +16,12 @@ export const SECTION_WORDS = [
   'Jailbreak',
 ];
 
+// Writer-attribution tag some packs (e.g. RenWrite) append to category
+// titles and answer lines: "<JC>", "<IR>", or a collab like "<JC/EM>".
+// Some lines carry a stray quote right after the tag (`<IR>"`) — an
+// artifact of the pack's authoring — so an abutting quote is absorbed too.
+const TRAILING_WRITER_TAG_RE = /\s*<[A-Za-z]{1,4}(?:\/[A-Za-z]{1,4})*>["”']?\s*$/;
+
 export function cleanTrailing(text) {
   // Match SECTION_WORDS case-sensitively only. Page headers ("SECOND HALF",
   // "FIRST QUARTER", etc.) are always uppercase in actual PDFs, so a
@@ -27,7 +33,30 @@ export function cleanTrailing(text) {
     if (idx !== -1) text = text.substring(0, idx);
   }
   text = text.replace(/\s+(?:Set of \d+.*|Splits?:.*|PACK \d+.*|Streaks?.*|Streak)$/i, '');
+  text = text.replace(TRAILING_WRITER_TAG_RE, '');
   return text.trim();
+}
+
+// Returns the category title a line carries, or null if the line isn't a
+// bold title. Normally that's just `line.isBold`, but a trailing writer tag
+// is set in the body font ("Double Jump <JC>"), so a title line may be
+// all-bold *except* the tag — accept that too, and strip the tag from the
+// title either way.
+function boldTitleOf(line) {
+  const m = line.text.match(TRAILING_WRITER_TAG_RE);
+  const title = m ? line.text.slice(0, m.index).trim() : line.text;
+  if (line.isBold) return title || line.text;
+  if (!m || !title) return null;
+  // Every non-whitespace char before the tag must come from a bold segment.
+  let pos = 0;
+  for (const seg of line.segments || []) {
+    const end = pos + seg.text.length;
+    if (!seg.bold && pos < m.index) {
+      if (seg.text.slice(0, Math.min(end, m.index) - pos).trim()) return null;
+    }
+    pos = end;
+  }
+  return title;
 }
 
 // Known structural lines that aren't categories. Case-sensitive on purpose:
@@ -93,8 +122,10 @@ export function parseQuestions(doc) {
 
   for (const line of lines) {
     const text = line.text;
-    // Question line (starts with "N.")
-    const qMatch = text.match(/^(\d{1,3})\.\s/);
+    // Question line (starts with "N."). A bare "N." on its own line counts
+    // too — Gradwrite-style Pyramids put the number alone above unnumbered
+    // "Part N:" lines.
+    const qMatch = text.match(/^(\d{1,3})\.(?:\s|$)/);
     if (qMatch) {
       const num = parseInt(qMatch[1]);
       if (num >= 1 && num <= 100 && currentCategory) {
@@ -127,13 +158,14 @@ export function parseQuestions(doc) {
     }
 
     // A bold line after an answer = category title
-    if (line.isBold) {
+    const boldTitle = boldTitleOf(line);
+    if (boldTitle) {
       if (inSplit) {
         // Sub-category within a split
         splitCount++;
-        currentCategory = `Splits ${splitCount}: ${text}`;
+        currentCategory = `Splits ${splitCount}: ${boldTitle}`;
       } else {
-        currentCategory = text;
+        currentCategory = boldTitle;
       }
       categoryQuestionCount = 0;
       currentInstructions = '';
@@ -208,6 +240,17 @@ export function parseQuestions(doc) {
     if (t.endsWith(title)) return t.substring(0, t.length - title.length).replace(/\s+$/, '');
     return text;
   }
+  // Remove trailing bleed (section words, the next category's title, writer
+  // tags) from an answer's text. The title must be tried on the *uncleaned*
+  // text first: cleanTrailing can eat part of a title it has a pattern for
+  // ("Linked Set of 5" loses " Set of 5"), leaving a fragment endsWith() can
+  // no longer see.
+  function cleanAnswerText(text, title) {
+    const untagged = text.replace(TRAILING_WRITER_TAG_RE, '');
+    const stripped = stripTrailingTitle(untagged, title);
+    if (stripped !== untagged) return cleanTrailing(stripped);
+    return stripTrailingTitle(cleanTrailing(text), title);
+  }
 
   const questions = [];
   for (let i = 0; i < questionStarts.length; i++) {
@@ -242,7 +285,7 @@ export function parseQuestions(doc) {
 
         // Also get plain answer for cleaning
         let answerPlain = combined.substring(ansStart, endPos).trim().replace(/\s+/g, ' ');
-        answerPlain = stripTrailingTitle(cleanTrailing(answerPlain), nextTitle);
+        answerPlain = cleanAnswerText(answerPlain, nextTitle);
 
         // Check for multiple A: answers (common in streaks)
         const aMatches = [];
@@ -265,8 +308,10 @@ export function parseQuestions(doc) {
             while (as2 < endPos && combined[as2] === ' ') as2++;
             const aEnd = ai + 1 < aMatches.length ? start.pos + aMatches[ai + 1] : endPos;
             const rich = extractRichRange(as2, aEnd, richSegments, posMap);
-            let plainText = cleanTrailing(combined.substring(as2, aEnd).trim().replace(/\s+/g, ' '));
-            if (ai === aMatches.length - 1) plainText = stripTrailingTitle(plainText, nextTitle);
+            const rawText = combined.substring(as2, aEnd).trim().replace(/\s+/g, ' ');
+            const plainText = ai === aMatches.length - 1
+              ? cleanAnswerText(rawText, nextTitle)
+              : cleanTrailing(rawText);
             // Trim rich HTML to match cleaned plain text length
             const cleanLen = plainText.length;
             let tLen = 0;
@@ -395,6 +440,36 @@ export function parseQuestions(doc) {
         message: `Question ${unique[i].num} is a multi-part clue whose final answer was never found — it has no answer.`,
       });
     }
+  }
+
+  // Post-process: a Pyramid (Gradwrite's name for a Jackpot-style chain) is
+  // one numbered block — a bare "11." above unnumbered "Part N:" clues —
+  // that the pack's own numbering gives several slots (the next question
+  // being 14 means the pyramid covers 11–13). Split the parts across that
+  // gap so every slot exists and shares the block's answer; the last slot
+  // absorbs any extra parts.
+  for (let i = 0; i < unique.length; i++) {
+    const q = unique[i];
+    if (!q.category || !/pyramid|jackpot/i.test(q.category) || q.streakRange) continue;
+    const parts = q.question.split(/\s(?=Part \d+\s*:)/);
+    if (parts.length < 2) continue;
+    const nextNum = i + 1 < unique.length ? unique[i + 1].num : 101;
+    const extraSlots = Math.min(nextNum - q.num - 1, parts.length - 1);
+    if (extraSlots < 1) continue;
+    const chunks = parts.slice(0, extraSlots);
+    chunks.push(parts.slice(extraSlots).join(' '));
+    q.question = chunks[0];
+    const inserts = [];
+    for (let s = 1; s < chunks.length; s++) {
+      inserts.push({
+        ...q,
+        num: q.num + s,
+        question: chunks[s],
+        posInCategory: q.posInCategory === null ? null : q.posInCategory + s,
+      });
+    }
+    unique.splice(i + 1, 0, ...inserts);
+    i += inserts.length;
   }
 
   return { questions: unique, issues };

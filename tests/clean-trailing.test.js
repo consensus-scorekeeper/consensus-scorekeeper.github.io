@@ -38,4 +38,25 @@ describe('cleanTrailing', () => {
   it('leaves clean text alone', () => {
     expect(cleanTrailing('Just an answer.')).toBe('Just an answer.');
   });
+
+  it('strips a trailing writer-attribution tag', () => {
+    expect(cleanTrailing('Hideo Kojima <IR>')).toBe('Hideo Kojima');
+    expect(cleanTrailing('W and Z bosons <EM>')).toBe('W and Z bosons');
+    expect(cleanTrailing('shared credit <JC/EM>')).toBe('shared credit');
+  });
+
+  it('strips a writer tag left dangling by a section cut (trailing space)', () => {
+    // "British Columbia <IR> Double Jump" → SECTION_WORDS cut leaves
+    // "British Columbia <IR> " — the tag must still come off.
+    expect(cleanTrailing('British Columbia <IR> Double Jump')).toBe('British Columbia');
+  });
+
+  it('absorbs a stray quote abutting the writer tag', () => {
+    expect(cleanTrailing('Old Hickory <IR>"')).toBe('Old Hickory');
+  });
+
+  it('does not touch mid-text angle brackets or comparisons', () => {
+    expect(cleanTrailing('a <IR> tag mid-answer stays')).toBe('a <IR> tag mid-answer stays');
+    expect(cleanTrailing('prove that x < y')).toBe('prove that x < y');
+  });
 });
