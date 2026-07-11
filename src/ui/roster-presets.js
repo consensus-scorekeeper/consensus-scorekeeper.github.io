@@ -63,6 +63,33 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "test12",
+    "slug": "test",
+    "description": "asdf",
+    "rosters": [
+      {
+        "name": "Team 1",
+        "players": [
+          "Hi",
+          "There",
+          "Hi There",
+          "D B",
+          "A Z",
+          "R F"
+        ]
+      },
+      {
+        "name": "Team 2",
+        "players": [
+          "Hii",
+          "Thereee",
+          "Im Dumb",
+          "Poor Chicken"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
