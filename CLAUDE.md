@@ -174,6 +174,8 @@ workers/
   workflows/
     update-manifest.yml    ← auto-regenerates manifests on push (see below)
     process-submission.yml ← issue-form submission → validated PR (see below)
+    finalize-submission.yml ← submission PR merged/closed → resolves the
+                              originating issue (see below)
 tests/                  ← vitest tests; run with `npm test`
 ```
 
@@ -528,6 +530,18 @@ one file per game. The pure logic lives in `src/util/submission.js`
 working-tree diff into a PR (`Closes #N`), so publishing is always a
 maintainer-reviewed merge. Manifests are untouched here — the existing
 auto-manifest workflow regenerates them after the merge.
+
+**Issue lifecycle** — the submitter never has to watch the PR;
+`finalize-submission.yml` (on `pull_request: closed` for
+`submission/issue-*` heads) resolves the originating issue either way:
+merge → 🎉 comment with the live stats link (slug read off the PR's
+changed files) + close as completed (belt-and-braces next to the PR
+body's `Closes #N`); closed unmerged → "not published" comment with
+resubmit instructions + close as not-planned. Editing a rejected issue
+still reprocesses it — process-submission.yml **reopens** the issue
+whenever a fresh PR results, so open issue ⟺ pending submission.
+Fork PRs can't spoof this: the workflow requires a same-repo head and
+the `results-submission` label on the referenced issue.
 
 ### Pending-submission preview
 

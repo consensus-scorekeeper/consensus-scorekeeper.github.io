@@ -81,6 +81,12 @@ jobs:
               exit 1
             fi
           fi
+          # A rejected submission's issue is closed by finalize-submission.yml
+          # when its PR is closed unmerged; an edit that produced this fresh
+          # PR is a live submission again, so bring the issue back with it.
+          if [ "$(gh issue view "$ISSUE" --json state --jq .state)" = "CLOSED" ]; then
+            gh issue reopen "$ISSUE"
+          fi
           # tournaments/preview.html renders these stats straight from the
           # submission branch, so submitters see them before the PR merges.
           PREVIEW_URL="https://consensus-scorekeeper.github.io/tournaments/preview.html?slug=$SLUG&preview=$ISSUE"

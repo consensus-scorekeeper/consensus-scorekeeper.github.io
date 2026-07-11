@@ -1,0 +1,74 @@
+# Closes the loop on results submissions: when a submission PR
+# (submission/issue-<N>, created by process-submission.yml) is merged or
+# closed, resolve the originating issue. Merge already auto-closes it via
+# the PR body's "Closes #N", but silently — this adds a 🎉 comment with
+# the live stats link. A PR closed WITHOUT merging would otherwise leave
+# the issue dangling open forever: it gets a comment explaining that the
+# games were not published (and that editing the issue resubmits) and is
+# closed as "not planned". process-submission.yml reopens the issue if an
+# edit later produces a fresh PR.
+#
+# Safety: only same-repo heads count — a fork PR can name its head branch
+# "submission/issue-<N>" but can never be one — and the referenced issue
+# must actually carry the results-submission label.
+
+name: Finalize results submission
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  issues: write
+  pull-requests: read
+
+jobs:
+  finalize:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      startsWith(github.event.pull_request.head.ref, 'submission/issue-')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve the originating issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MERGED: ${{ github.event.pull_request.merged }}
+          PR: ${{ github.event.pull_request.number }}
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          ISSUE="${HEAD_REF#submission/issue-}"
+          case "$ISSUE" in
+            ''|*[!0-9]*) echo "Head branch '$HEAD_REF' has no issue number — nothing to do."; exit 0 ;;
+          esac
+          if ! gh issue view "$ISSUE" --repo "$GITHUB_REPOSITORY" \
+              --json labels --jq '.labels[].name' | grep -qx 'results-submission'; then
+            echo "Issue #$ISSUE is not a results submission — nothing to do."
+            exit 0
+          fi
+
+          if [ "$MERGED" = "true" ]; then
+            # Link straight to the tournament the submission touched. Falls
+            # back to the hub if the slug can't be read off the PR's files.
+            # The trailing ? matters: capture() errors on non-matching paths
+            # (a new-tournament PR also touches roster-presets.js).
+            SLUG=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json files \
+              --jq '[.files[].path | capture("^tournaments/(?<s>[^/]+)/results/")? | .s] | first // empty' || true)
+            STATS_URL="https://consensus-scorekeeper.github.io/tournaments/${SLUG:+$SLUG/}"
+            {
+              echo "🎉 **Published!** Your games were merged and now count toward the official stats: $STATS_URL"
+              echo ''
+              echo '(If they are not visible yet, give the site a couple of minutes — the manifest regenerates and the page redeploys after the merge.)'
+            } > body.md
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file body.md
+            # "Closes #N" in the PR body normally closed it already; this
+            # covers manually-recreated PRs that lost the keyword.
+            gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason completed || true
+          else
+            {
+              echo "This submission's pull request (#$PR) was closed without being merged, so these games were **not published**."
+              echo ''
+              echo 'If the maintainer asked for changes, edit this issue with the corrected CSV(s) — it revalidates automatically, opens a fresh pull request, and reopens this issue.'
+            } > body.md
+            gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file body.md
+            gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason 'not planned' || true
+          fi
