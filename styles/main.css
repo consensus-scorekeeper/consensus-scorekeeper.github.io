@@ -126,6 +126,21 @@ body {
 .ts-status-ok { color: #2c7a2c; }
 .ts-status-warn { color: #a06400; }
 .ts-empty { color: #777; padding: 12px 0; font-style: italic; }
+/* Pending-submission preview banner (ui/tournament-stats.js). Sits above
+   the status line and persists across view navigation, so previewed
+   (unpublished) stats are never mistaken for the published page. */
+.ts-preview-banner {
+  padding: 10px 14px;
+  margin-bottom: 14px;
+  border-radius: 6px;
+  font-size: 0.92rem;
+  border: 1px solid;
+}
+.ts-preview-loading { background: #f4f4f4; border-color: #ddd; color: #555; }
+.ts-preview-info    { background: #f0f4fa; border-color: #b9cbe4; color: #2d4a6d; }
+.ts-preview-ok      { background: #eef7ee; border-color: #b9dcb9; color: #2c7a2c; }
+.ts-preview-warn    { background: #fdf6e7; border-color: #e8cf98; color: #7a5a00; }
+.ts-preview-error   { background: #faf0f0; border-color: #e4b9b9; color: #8a2c2c; }
 .ts-loading {
   display: flex;
   align-items: center;

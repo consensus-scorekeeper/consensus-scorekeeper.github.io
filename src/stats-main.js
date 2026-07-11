@@ -1,26 +1,43 @@
 // Entry point for every per-tournament stats page (e.g.
-// tournaments/<slug>/index.html). Identifies the current tournament from
-// a <meta name="tournament-slug"> tag, looks up the matching entry in
-// TOURNAMENTS, stamps the document title + page heading, then wires up
-// the manifest-driven viewer.
+// tournaments/<slug>/index.html) AND the generic preview page
+// (tournaments/preview.html). Identifies the current tournament from a
+// <meta name="tournament-slug"> tag — or, on the preview page, from a
+// ?slug= query param — stamps the document title + page heading, then
+// wires up the manifest-driven viewer.
 //
-// The manifest lives next to this page at ./results/manifest.json — the
-// auto-manifest GitHub workflow regenerates it on every push that touches
-// tournaments/<slug>/results/.
+// The manifest lives in the tournament's folder at results/manifest.json —
+// the auto-manifest GitHub workflow regenerates it on every push that
+// touches tournaments/<slug>/results/.
+//
+// A ?preview=<issue-number> query param (either page) overlays the games
+// from that issue's unmerged submission PR on top of the published set,
+// so submitters can see their stats before the maintainer merges. The
+// preview page exists because a brand-new tournament has no published
+// page (or registry entry) to attach ?preview= to yet — its heading falls
+// back to a name derived from the slug.
 
 import { setupTournamentStats } from './ui/tournament-stats.js';
 import { getTournamentBySlug } from './ui/roster-presets.js';
 import { submitResultsLink } from './ui/submission-links.js';
+import { resolvePreviewContext } from './util/submission-preview.js';
+import { deriveTournamentName } from './util/submission.js';
 
 const slugMeta = document.querySelector('meta[name="tournament-slug"]');
-const slug = slugMeta ? slugMeta.content : '';
+const { slug, baseDir, manifestUrl, issue } = resolvePreviewContext({
+  metaSlug: slugMeta ? slugMeta.content : '',
+  search: window.location.search,
+});
 const tournament = getTournamentBySlug(slug);
 
-if (tournament) {
-  document.title = `${tournament.name} — Stats`;
+const displayName = tournament ? tournament.name
+  : slug ? deriveTournamentName(slug)
+  : '';
+if (displayName) {
+  document.title = `${displayName} — Stats`;
   const heading = document.getElementById('stats-page-heading');
-  if (heading) heading.textContent = tournament.name;
-} else if (slug) {
+  if (heading) heading.textContent = displayName;
+}
+if (slug && !tournament && !issue) {
   console.warn(`[stats-main] no TOURNAMENTS entry for slug "${slug}"`);
 }
 
@@ -41,8 +58,9 @@ if (statsSection && slug) {
 // pipeline-generated pages are copies of a built-in tournament's shell, so
 // a baked-in link would point at a deck the new tournament doesn't have.
 async function addRulesBriefingLink(section, beforeEl) {
+  const href = `${baseDir}rules-slides.html`;
   try {
-    const res = await fetch('rules-slides.html', { method: 'HEAD' });
+    const res = await fetch(href, { method: 'HEAD' });
     if (!res.ok) return;
   } catch {
     return; // unreachable — just omit the link
@@ -50,10 +68,19 @@ async function addRulesBriefingLink(section, beforeEl) {
   const p = document.createElement('p');
   p.className = 'ts-intro';
   const link = document.createElement('a');
-  link.href = 'rules-slides.html';
+  link.href = href;
   link.textContent = 'View rules briefing →';
   p.appendChild(link);
   section.insertBefore(p, beforeEl);
 }
 
-setupTournamentStats({ manifestUrl: 'results/manifest.json' });
+if (slug) {
+  setupTournamentStats({
+    manifestUrl,
+    preview: issue ? { issue, slug } : null,
+  });
+} else {
+  // preview.html opened without a valid ?slug= — nothing to load.
+  const status = document.getElementById('ts-status');
+  if (status) status.textContent = 'No tournament specified — check the preview link you followed.';
+}

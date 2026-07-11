@@ -23,6 +23,11 @@ share `styles/main.css` and the contents of `src/`:
   name="tournament-slug">` tag in the page).
 - `tournaments/<slug>/rules-slides.html` → optional per-tournament rules
   briefing (a self-contained slide deck).
+- `tournaments/preview.html` → generic **pending-submission preview**
+  page (`?slug=<slug>&preview=<issue>`): same stats viewer, slug from the
+  query string instead of a meta tag. Exists because a brand-new
+  tournament has no published page until its first submission PR merges
+  (see "Pending-submission preview" below).
 
 Each page has its own entry-point JS:
 - `src/main.js` — scorekeeper
@@ -40,6 +45,7 @@ stats.html                                       ← legacy redirect → tournam
 styles/main.css                                  ← shared stylesheet
 tournaments/
   index.html                                     ← stats hub (lists every tournament)
+  preview.html                                   ← pending-submission preview (?slug=&preview=)
   <slug>/
     index.html                                   ← per-tournament stats page
     rules-slides.html                            ← per-tournament rules briefing (optional)
@@ -48,11 +54,15 @@ tournaments/
       *.csv                                      ← exported games (drop CSVs here)
 src/
   main.js               ← scorekeeper entry: imports modules, wires DOM, loadState()
-  stats-main.js         ← per-tournament-stats-page entry: reads slug from <meta>,
-                          stamps title from TOURNAMENTS[slug], injects the
-                          submit-results link + the rules-briefing link (HEAD-probes
+  stats-main.js         ← per-tournament-stats-page entry (also drives
+                          tournaments/preview.html): slug from <meta> or, failing
+                          that, a validated ?slug= param; stamps title from
+                          TOURNAMENTS[slug] (deriveTournamentName fallback for
+                          unregistered preview slugs), injects the submit-results
+                          link + the rules-briefing link (HEAD-probes
                           rules-slides.html — never hardcoded in the shell, which
-                          the submission pipeline copies), loads results/manifest.json
+                          the submission pipeline copies), loads results/manifest.json,
+                          passes ?preview=<issue> through to the viewer
   tournaments-main.js   ← tournaments/index.html entry: hub list + search filter
                           + create-tournament link
   state.js              ← state singleton + reducers + subscribe()
@@ -114,6 +124,8 @@ src/
     tutorial.js         ← startTutorialGame: boots a sandbox session w/ preset rosters + pack
     tutorial-overlay.js ← 13-step coach-marks overlay engine (multi-target highlight)
     tournament-stats.js ← setupTournamentStats: manifest fetch + view router
+                          + pending-submission preview overlay (loadPreview:
+                          GitHub API + raw.githubusercontent fetches, banner)
     submission-links.js ← DOM builders for the submit-results / create-tournament
                           links (both open the GitHub issue form via
                           util/submit-results.js); submit-results on every
@@ -134,6 +146,10 @@ src/
     submission.js       ← splitCsvBundle / gameIdentityKey / canonicalResultsFilename /
                           planSubmissionWrites: pure logic behind the results-submission
                           pipeline (consumed by scripts/process-submission.mjs)
+    submission-preview.js ← pure logic behind the pending-submission preview:
+                          resolvePreviewContext (meta/query slug + ?preview=),
+                          GitHub API URL builders, classifyPull, previewCsvFiles,
+                          rawFileUrl (SHA-pinned), previewBannerText
 assets/
   tutorial-pack.pdf     ← bundled pack the tutorial sandbox loads
   sample_txt_pack.txt   ← full 100-slot .txt pack; fixture for tests/text-pack.test.js
@@ -513,6 +529,36 @@ working-tree diff into a PR (`Closes #N`), so publishing is always a
 maintainer-reviewed merge. Manifests are untouched here — the existing
 auto-manifest workflow regenerates them after the merge.
 
+### Pending-submission preview
+
+Submitters see their stats **before the maintainer merges** — no extra
+hosting, no auto-publish. The submission workflow's issue comment links to
+`tournaments/preview.html?slug=<slug>&preview=<issue-number>`; the same
+`?preview=` param also works on any per-tournament page. In preview mode
+the viewer loads the published manifest as usual, then overlays the
+unmerged games client-side (`loadPreview` in `ui/tournament-stats.js`,
+pure logic in `util/submission-preview.js`):
+
+1. resolve the `submission/issue-<N>` branch's PR via the GitHub REST API
+   (CORS-enabled, unauthenticated — well under the 60 req/hr limit),
+2. list the PR's changed files, keep CSVs directly under
+   `tournaments/<slug>/results/` (drops the roster-presets.js /
+   index.html changes a new-tournament PR carries),
+3. fetch each from `raw.githubusercontent.com` **pinned to the head SHA**
+   (branch-name raw URLs sit behind a ~5-minute CDN cache; SHA-pinned
+   ones are immutable, so an edited submission previews correctly),
+4. upsert by filename — the pipeline's content-identity means a
+   correction previews as a replacement, not a duplicate.
+
+A persistent banner (`#ts-preview-banner`, outside `#ts-content` so view
+navigation can't wipe it) always states what's being previewed, and says
+so when the PR turns out to be merged/closed/missing or the API is
+rate-limited — the page then just shows published stats. Guardrails: a
+query-string slug only counts if it passes `isValidTournamentSlug`
+(same path-traversal guard as the pipeline), and `?preview=` must be a
+bare integer. Review stays the publish gate — preview is opt-in via URL
+and clearly labeled, never the canonical page.
+
 ### Hosting
 
 The repo lives at `consensus-scorekeeper/consensus-scorekeeper.github.io`
@@ -565,6 +611,10 @@ transparent to tests. Notable test files:
                                      content-based game identity, replace-vs-add
 - `submit-results.test.js`         — submitResultsUrl targets the canonical repo's
                                      issue form with the slug prefilled
+- `submission-preview.test.js`     — pending-submission preview logic: context
+                                     resolution (meta vs ?slug=, validation), API URL
+                                     builders, PR classification, changed-file
+                                     filtering, banner copy
 
 If you add stats functionality, add fixtures + assertions there so the
 manifest can't silently drift.

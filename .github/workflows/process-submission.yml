@@ -44,6 +44,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
+          SLUG: ${{ steps.process.outputs.slug }}
         run: |
           BRANCH="submission/issue-$ISSUE"
           git config user.name  'github-actions[bot]'
@@ -80,7 +81,16 @@ jobs:
               exit 1
             fi
           fi
-          echo "pr_note=Opened/updated PR for review: $PR_URL" >> "$GITHUB_OUTPUT"
+          # tournaments/preview.html renders these stats straight from the
+          # submission branch, so submitters see them before the PR merges.
+          PREVIEW_URL="https://consensus-scorekeeper.github.io/tournaments/preview.html?slug=$SLUG&preview=$ISSUE"
+          {
+            echo 'pr_note<<PR_NOTE_EOF'
+            echo "Opened/updated PR for review: $PR_URL"
+            echo ''
+            echo "📊 [**Preview these stats now**]($PREVIEW_URL) — no need to wait for the merge. The preview always shows this submission's latest validated version; once merged, the games appear on the tournament's own stats page."
+            echo 'PR_NOTE_EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Report back on the issue
         if: always() && steps.process.outputs.status != ''

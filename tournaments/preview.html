@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<!-- Generic pending-submission preview page. Unlike the per-tournament
+     shells this file has no tournament-slug meta tag: stats-main.js reads
+     ?slug=<slug>&preview=<issue-number> from the query string instead.
+     It exists so a brand-new tournament — whose own page only appears on
+     the site once its first submission PR merges — can still be previewed.
+     The submission workflow links here from its issue comment. -->
+<title>Submission Preview — Consensus Stats</title>
+<link rel="stylesheet" href="../styles/main.css">
+</head>
+<body>
+
+<div id="stats-page">
+  <header class="stats-header">
+    <h1 id="stats-page-heading">Submission Preview</h1>
+    <a class="stats-back-link" href="index.html">← All tournaments</a>
+  </header>
+
+  <section class="setup-section" id="tournament-stats-section">
+    <span class="ts-status" id="ts-status"></span>
+    <div id="ts-content"></div>
+  </section>
+</div>
+
+<script type="module" src="../src/stats-main.js"></script>
+
+</body>
+</html>

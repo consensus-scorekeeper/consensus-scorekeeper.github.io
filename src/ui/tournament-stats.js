@@ -19,6 +19,14 @@
 import { parseResultsCsv } from '../util/parse-results-csv.js';
 import { aggregateTournament, gamesForTeam, gamesForPlayer } from '../util/tournament-aggregate.js';
 import { escapeHtml } from '../util/escape.js';
+import {
+  pullsForIssueUrl,
+  classifyPull,
+  pullFilesUrl,
+  previewCsvFiles,
+  rawFileUrl,
+  previewBannerText,
+} from '../util/submission-preview.js';
 
 const tsState = {
   games: [],                      // [{ id, packet, teamA, teamB, scoreA, scoreB, winner, exportedAt, players }]
@@ -104,6 +112,82 @@ async function loadFromManifest(manifestUrl) {
     console.warn('[tournament-stats] failed to load manifest:', e);
   } finally {
     tsState.loading = false;
+    render();
+  }
+}
+
+// ==================== PENDING-SUBMISSION PREVIEW ====================
+
+// Persistent banner above the status line while previewing an unmerged
+// submission. Lives outside #ts-content so view navigation can't wipe it.
+function setPreviewBanner(text, kind) {
+  const section = document.getElementById('tournament-stats-section');
+  if (!section) return;
+  let el = document.getElementById('ts-preview-banner');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'ts-preview-banner';
+    section.insertBefore(el, section.firstChild);
+  }
+  el.className = `ts-preview-banner ts-preview-${kind}`;
+  el.textContent = text;
+}
+
+// Overlays the games from an unmerged submission PR (submission/issue-<N>)
+// onto the published set: resolve the branch's PR, list its changed files,
+// fetch each of this tournament's CSVs from the PR's head commit, and
+// upsert by filename — the same content-identity the pipeline uses, so a
+// correction previews as a replacement rather than a duplicate game.
+// Purely client-side: the GitHub REST API and raw.githubusercontent.com
+// both allow cross-origin reads on public repos.
+async function loadPreview({ issue, slug }) {
+  setPreviewBanner(`Loading pending submission #${issue}…`, 'loading');
+  const fetchJson = async (url) => {
+    const resp = await fetch(url, { headers: { Accept: 'application/vnd.github+json' } });
+    if (!resp.ok) throw new Error(`${resp.status} for ${url}`);
+    return resp.json();
+  };
+  try {
+    const { status, pull } = classifyPull(await fetchJson(pullsForIssueUrl(issue)));
+    if (status !== 'open') {
+      setPreviewBanner(previewBannerText({ status, issue }), status === 'merged' ? 'ok' : 'info');
+      return;
+    }
+
+    // A bulk drop can exceed one page of changed files; follow up to a
+    // sane number of extra pages rather than silently truncating.
+    const files = [];
+    for (let page = 1; page <= 5; page++) {
+      const batch = await fetchJson(pullFilesUrl(pull.number, page));
+      files.push(...batch);
+      if (batch.length < 100) break;
+    }
+
+    const csvs = previewCsvFiles(files, slug);
+    const results = await Promise.all(csvs.map(async (f) => {
+      try {
+        const resp = await fetch(rawFileUrl(pull.head.sha, f.path));
+        if (!resp.ok) return { ok: false };
+        const parsed = parseResultsCsv(await resp.text());
+        if (!parsed.teamA || !parsed.teamB) return { ok: false };
+        return { ok: true, filename: f.filename, parsed };
+      } catch {
+        return { ok: false };
+      }
+    }));
+
+    let loaded = 0, replaced = 0, failed = 0;
+    for (const r of results) {
+      if (!r.ok) { failed++; continue; }
+      if (tsState.games.some((g) => g.id === r.filename)) replaced++;
+      upsertGame({ id: r.filename, ...r.parsed });
+      loaded++;
+    }
+    setPreviewBanner(previewBannerText({ status: 'open', issue, loaded, replaced, failed }), 'warn');
+  } catch (e) {
+    console.warn('[tournament-stats] failed to load submission preview:', e);
+    setPreviewBanner(previewBannerText({ status: 'error', issue }), 'error');
+  } finally {
     render();
   }
 }
@@ -363,7 +447,9 @@ function render() {
   else                                content.innerHTML = renderStandings(agg);
 }
 
-export function setupTournamentStats({ manifestUrl } = {}) {
+// preview (optional): { issue, slug } — overlay the games from that
+// issue's unmerged submission PR after the published manifest loads.
+export function setupTournamentStats({ manifestUrl, preview } = {}) {
   // Delegated click handler for the in-page navigation (drill into team /
   // player / game views). Bound to a stable section parent so it survives
   // re-renders of #ts-content.
@@ -383,5 +469,12 @@ export function setupTournamentStats({ manifestUrl } = {}) {
   // kicks off so the user never sees the "no games published" flash.
   if (manifestUrl) tsState.loading = true;
   render();
-  if (manifestUrl) loadFromManifest(manifestUrl);
+  // Preview waits for the published games so the overlay's replace-vs-add
+  // accounting (and the final render) sees the complete picture. A missing
+  // manifest (brand-new tournament) resolves to an empty set and the
+  // preview still loads.
+  (async () => {
+    if (manifestUrl) await loadFromManifest(manifestUrl);
+    if (preview && preview.issue && preview.slug) await loadPreview(preview);
+  })();
 }
