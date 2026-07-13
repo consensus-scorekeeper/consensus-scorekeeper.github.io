@@ -63,6 +63,42 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "BOSON",
+    "slug": "boson-consensus-2026",
+    "description": "2-day open summer Quizbowl event at Claremont Colleges",
+    "rosters": [
+      {
+        "name": "Dr. Popandlocktopus",
+        "players": [
+          "Abhinav Rachakonda",
+          "Ian Tullis",
+          "Freddie O'Hara",
+          "Annika Larson",
+          "Kaiwen Xiao",
+          "Jorin Schug",
+          "Josh Xu",
+          "Andrew Nucci",
+          "March Delfin",
+          "Jason Cheng",
+          "Mik Larsen"
+        ]
+      },
+      {
+        "name": "Woe Vicky! Hast thou forsaken me?",
+        "players": [
+          "Anderson Wang",
+          "Karthik Jayaram",
+          "Jaskaran Singh",
+          "Rahul Jogadhenu",
+          "Leon Zhou",
+          "Jaiden Li",
+          "Annika Larson",
+          "Adam Borison"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
