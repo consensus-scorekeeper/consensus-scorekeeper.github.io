@@ -23,7 +23,13 @@ const wait = (pred, why, ms = 5000) => new Promise((resolve, reject) => {
 function connectPlayer(code, name) {
   const ws = new WebSocket(`${WS}/rooms/${code}/ws?name=${encodeURIComponent(name)}&role=player`);
   ws.got = [];
-  ws.onmessage = (e) => ws.got.push(JSON.parse(e.data));
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    // Echo RTT probes like player.html does (feeds the server's
+    // latency-equalized arbitration; see qb-moderator SPEC.md).
+    if (m.t === 'ping') { ws.send(JSON.stringify({ t: 'pong', n: m.n, ts: m.ts })); return; }
+    ws.got.push(m);
+  };
   ws.next = (pred, why, ms) => wait(() => {
     const i = ws.got.findIndex(pred);
     return i >= 0 ? ws.got.splice(i, 1)[0] : null;

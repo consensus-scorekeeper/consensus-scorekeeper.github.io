@@ -620,11 +620,16 @@ in the scoreboard.
   plan, rooms self-destruct after 12h idle); self-host by deploying
   `qb-moderator/rooms/` and setting `?roomserver=` or
   `localStorage['consensus-room-server']`.
-- **Frozen protocol**: player→DO `{t:'buzz'}`; host→DO
-  `{t:'state',snapshot}` / `{t:'arm'}` / `{t:'disarm'}` /
+- **Frozen protocol**: player→DO `{t:'buzz'}` / `{t:'pong',n,ts}`;
+  host→DO `{t:'state',snapshot}` / `{t:'arm'}` / `{t:'disarm'}` /
   `{t:'qlog',qlog}`; DO→client `welcome/join/leave/buzz/rejected` +
-  relays. The client (`src/vendor/room.js`) is vendored byte-identical
-  from `../qb-moderator/app/room.js` — protocol/API changes land THERE
+  relays + `{t:'ping',n,ts}` RTT probes to players. Arbitration is
+  **latency-equalized**: the DO measures per-player RTT via the pings
+  (player.html echoes them first thing) and adjudicates buzzes within a
+  short collection window by estimated press time (arrival − RTT/2,
+  capped) — remote players race host-local ones fairly. The client
+  (`src/vendor/room.js`) is vendored byte-identical from
+  `../qb-moderator/app/room.js` — protocol/API changes land THERE
   first (see its SPEC.md, which names this repo as a consumer).
 - **Game state never leaves this app.** `renderGame` → `syncRoom()`
   pushes the shared `getScoreboardSnapshot()` (same object the popout
