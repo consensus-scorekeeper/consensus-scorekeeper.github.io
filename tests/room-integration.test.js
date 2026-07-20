@@ -10,7 +10,7 @@ import { addPoints, undoLast } from '../src/state.js';
 import { rebuildStreakGroups } from '../src/game/streaks.js';
 import {
   _setRoomForTest, handleRemoteBuzz, awardPreselect, dismissPreselect,
-  assignBuzzer, toggleHold,
+  assignBuzzer, assignJoinerToTeam, toggleHold,
 } from '../src/ui/room.js';
 import { resetState, makeQ } from './helpers.js';
 
@@ -199,6 +199,47 @@ describe('unmatched buzz -> click-to-assign', () => {
     await tick();
     expect(state.room.preselect).toMatchObject({ team: 'a', playerName: 'Kim Lee' });
     expect(state.room.preselect.unmatched).toBeFalsy();
+  });
+});
+
+describe('assign joiner to a TEAM (new roster player)', () => {
+  it('adds the joiner as a new player and converts their pending unmatched buzz', async () => {
+    renderGame();
+    handleRemoteBuzz('Quinn');
+    await tick();
+    expect(state.room.preselect).toMatchObject({ joinName: 'Quinn', unmatched: true });
+
+    assignJoinerToTeam('Quinn', 'b');
+    await tick();
+    expect(state.teamB.players.at(-1)).toMatchObject({ name: 'Quinn', points: 0 });
+    expect(state.room.preselect).toMatchObject({ team: 'b', playerName: 'Quinn' });
+    expect(awardPreselect()).toBe(true);
+    expect(state.teamB.players.at(-1).points).toBe(10);
+
+    handleRemoteBuzz('Quinn'); // later buzzes auto-match the new player
+    await tick();
+    expect(state.room.preselect).toMatchObject({ team: 'b', playerName: 'Quinn' });
+  });
+
+  it('works pre-buzz from the room panel, ignores duplicates and blanks', () => {
+    assignJoinerToTeam('Rae', 'a');
+    expect(state.teamA.players.at(-1).name).toBe('Rae');
+    assignJoinerToTeam('Rae', 'b'); // already on a roster -> no-op
+    expect(state.teamB.players.some((p) => p.name === 'Rae')).toBe(false);
+    assignJoinerToTeam('   ', 'a');
+    expect(state.teamA.players.at(-1).name).toBe('Rae');
+  });
+
+  it('supports a game started with empty rosters', async () => {
+    state.teamA.players = [];
+    state.teamB.players = [];
+    renderGame();
+    handleRemoteBuzz('Sky');
+    await tick();
+    expect(state.room.preselect).toMatchObject({ unmatched: true });
+    assignJoinerToTeam('Sky', 'a');
+    expect(awardPreselect()).toBe(true);
+    expect(state.teamA.players).toEqual([{ name: 'Sky', points: 10 }]);
   });
 });
 

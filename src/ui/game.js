@@ -36,9 +36,13 @@ export function padQuestionsToSlots() {
 export function startGame() {
   state.teamA.name = document.getElementById('team-a-name').value.trim() || 'Team A';
   state.teamB.name = document.getElementById('team-b-name').value.trim() || 'Team B';
+  // Empty rosters are allowed (confirmed, to catch mistakes): a moderator
+  // can start the game, open a buzzer room, and add players to teams as
+  // they join with the room code.
   if (state.teamA.players.length === 0 && state.teamB.players.length === 0) {
-    alert('Add at least one player to a team.');
-    return;
+    if (!confirm('No players on either team yet. Start anyway? You can add players to teams as they join a buzzer room.')) {
+      return;
+    }
   }
   state.teamA.score = 0;
   state.teamB.score = 0;

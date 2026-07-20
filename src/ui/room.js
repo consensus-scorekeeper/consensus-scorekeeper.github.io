@@ -16,7 +16,7 @@
 // The room client (src/vendor/room.js) is vendored byte-identical from
 // ../qb-moderator/app/room.js — never edit it here.
 
-import { state, addPoints } from '../state.js';
+import { state, addPoints, addRosterPlayer } from '../state.js';
 import { createRoom, connectHost } from '../vendor/room.js';
 import { getScoreboardSnapshot } from './scoreboard-popout.js';
 import {
@@ -183,6 +183,23 @@ export function dismissPreselect() {
   return true;
 }
 
+// Add a joiner as a NEW roster player on the given team. Rooms are not
+// phone-only (computers join too) and a game may start with empty
+// rosters — the moderator builds the teams as people join. Converts a
+// pending unmatched buzz from that joiner into a matched preselect.
+export function assignJoinerToTeam(joinName, team) {
+  const clean = String(joinName || '').trim();
+  if (!clean || (team !== 'a' && team !== 'b')) return;
+  if (matchNameToRoster(joinName, state, state.room.nameMap)) return; // already on a roster
+  if (addRosterPlayer(team, clean) === -1) return;
+  state.room.nameMap[joinName] = clean;
+  const ps = state.room.preselect;
+  if (ps && ps.unmatched && ps.joinName === joinName) {
+    state.room.preselect = { joinName, team, playerName: clean, qIndex: ps.qIndex };
+  }
+  rerender();
+}
+
 // Click-to-assign for an unmatched buzzer: bind the phone's join name to
 // a roster player (persists for the session) and convert the pending
 // preselect to a matched one.
@@ -257,7 +274,11 @@ function renderRoomUI() {
       bar.innerHTML = '';
     } else if (ps.unmatched) {
       bar.className = 'room-buzz-bar unmatched';
-      bar.innerHTML = `&#128276; <strong>${escapeHtml(ps.joinName)}</strong> buzzed &mdash; click a player row to assign them &middot; Esc dismisses`;
+      bar.innerHTML = `&#128276; <strong>${escapeHtml(ps.joinName)}</strong> buzzed &mdash; `
+        + `click a player row to link them, or add as a new player: `
+        + `<button class="btn" data-action="room-join-team" data-name="${escapeHtml(ps.joinName)}" data-team="a">+ ${escapeHtml(state.teamA.name)}</button> `
+        + `<button class="btn" data-action="room-join-team" data-name="${escapeHtml(ps.joinName)}" data-team="b">+ ${escapeHtml(state.teamB.name)}</button>`
+        + ` &middot; Esc dismisses`;
       bar.style.display = 'block';
     } else {
       const q = state.questions[state.currentQuestion];
@@ -280,22 +301,23 @@ function renderRoomUI() {
   if (!body) return;
   if (!room) {
     body.innerHTML = `
-      <div style="font-weight:600;margin-bottom:6px">Phone buzzers</div>
-      <div class="room-hint">Players join on their phones with a room code: a full-screen
-        buzz button plus the live scoreboard and past questions.</div>
+      <div style="font-weight:600;margin-bottom:6px">Remote buzzers</div>
+      <div class="room-hint">Players join on their phones or computers with a room code: a
+        big buzz button (Space on a keyboard) plus the live scoreboard and past questions.</div>
       <button class="btn" data-action="room-create">Create room</button>`;
     return;
   }
-  const phones = state.room.connected.map((n) => {
+  const joiners = state.room.connected.map((n) => {
     const m = matchNameToRoster(n, state, state.room.nameMap);
     const status = m
       ? `&rarr; ${escapeHtml(m.playerName)} (${m.team === 'a' ? escapeHtml(state.teamA.name) : escapeHtml(state.teamB.name)})`
-      : '<span class="room-unassigned">unassigned</span>';
+      : `<button class="btn room-x" data-action="room-join-team" data-name="${escapeHtml(n)}" data-team="a" title="Add as a new player on ${escapeHtml(state.teamA.name)}">+ ${escapeHtml(state.teamA.name)}</button>`
+        + ` <button class="btn room-x" data-action="room-join-team" data-name="${escapeHtml(n)}" data-team="b" title="Add as a new player on ${escapeHtml(state.teamB.name)}">+ ${escapeHtml(state.teamB.name)}</button>`;
     const unassign = state.room.nameMap[n]
       ? ` <button class="btn room-x" data-action="room-unassign" data-name="${escapeHtml(n)}" title="Forget this assignment">&times;</button>`
       : '';
     return `<div class="room-phone">${escapeHtml(n)} ${status}${unassign}</div>`;
-  }).join('') || '<div class="room-hint">No phones connected yet.</div>';
+  }).join('') || '<div class="room-hint">No players connected yet.</div>';
   body.innerHTML = `
     <div class="room-code-row">Room <strong class="room-code">${escapeHtml(state.room.code)}</strong>
       <span class="room-hint">${wsUp ? 'connected' : 'reconnecting&hellip;'}</span></div>
@@ -303,7 +325,7 @@ function renderRoomUI() {
       <button class="btn" data-action="room-copy-player">Copy player link</button>
       <button class="btn" data-action="room-copy-spectator">Copy spectator link</button>
     </div>
-    <label class="room-hold-row"><input type="checkbox" data-action="room-hold" ${state.room.hold ? 'checked' : ''}> Hold buzzers (ignore all buzzes)</label>
-    <div class="room-phones">${phones}</div>
+    <label class="room-hold-row" title="Buzz buttons go dark on every connected device and any buzz that sneaks in is ignored — for reading rules, settling disputes, or between rounds"><input type="checkbox" data-action="room-hold" ${state.room.hold ? 'checked' : ''}> Hold buzzers (stop accepting buzzes until unchecked)</label>
+    <div class="room-phones">${joiners}</div>
     <button class="btn" data-action="room-close">Close room</button>`;
 }

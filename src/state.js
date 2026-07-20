@@ -136,6 +136,19 @@ export function addPoints(team, playerIndex, points) {
   notify();
 }
 
+// Add a player to a team mid-game. Used by the buzzer rooms: remote
+// joiners (phone or computer) can be added as NEW roster players, so a
+// game may even start with empty rosters and build teams as people join.
+// Returns the new player's index, or -1 for a blank name.
+export function addRosterPlayer(team, name) {
+  const teamObj = team === 'a' ? state.teamA : state.teamB;
+  const clean = String(name || '').trim();
+  if (!clean) return -1;
+  teamObj.players.push({ name: clean, points: 0 });
+  notify();
+  return teamObj.players.length - 1;
+}
+
 export function clearPlayerPoints(team, playerIndex) {
   const teamObj = team === 'a' ? state.teamA : state.teamB;
   const entryIdx = state.history.findIndex(h =>

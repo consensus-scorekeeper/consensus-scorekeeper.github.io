@@ -644,7 +644,12 @@ in the scoreboard.
   explicit assignments stored by NAME in `state.room.nameMap`) and shows
   a banner + row highlight; Space/Enter awards (+10 / +5 streak), Esc
   dismisses and re-opens, any other scoring path clears it, unmatched
-  names are assigned by clicking a player row. Buzzes we won't act on
+  names are either linked to an existing player (click their row) or
+  added as a NEW roster player on a chosen team (`assignJoinerToTeam`,
+  `room-join-team` buttons in the banner + panel joiner list — rooms are
+  not phone-only, and a game may start with EMPTY rosters: startGame
+  confirms instead of blocking, teams get built as people join). Buzzes
+  we won't act on
   (spectator sentinel `~watch…`, hold toggle, jailbreak-locked player,
   already-answered question) get a SILENT re-arm — force the diff guard
   (`lastSentArmed = null`) and resync.

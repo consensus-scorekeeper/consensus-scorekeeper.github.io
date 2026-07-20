@@ -47,7 +47,7 @@ import { applyCustomAward, setupDevTools, reparseCurrentPdf as reparsePdfImpl } 
 import { setupKeybinds } from './ui/keybinds.js';
 import {
   createAndJoinRoom, closeRoom, copyPlayerLink, copySpectatorLink,
-  toggleHold, unassignPhone,
+  toggleHold, unassignPhone, assignJoinerToTeam,
 } from './ui/room.js';
 import { escapeHtml, csvEscape } from './util/escape.js';
 import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
@@ -229,6 +229,7 @@ const ACTION_HANDLERS = {
   'room-copy-spectator': () => copySpectatorLink(),
   'room-hold': () => toggleHold(),
   'room-unassign': (btn) => unassignPhone(btn.dataset.name),
+  'room-join-team': (btn) => assignJoinerToTeam(btn.dataset.name, btn.dataset.team),
   'apply-custom-award': () => applyCustomAward(),
   'prev-question': () => prevQuestion(),
   'skip-question': () => skipQuestion(),
