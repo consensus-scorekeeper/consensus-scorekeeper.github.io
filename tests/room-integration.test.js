@@ -11,6 +11,7 @@ import { rebuildStreakGroups } from '../src/game/streaks.js';
 import {
   _setRoomForTest, handleRemoteBuzz, handlePendingBuzz, awardPreselect,
   dismissPreselect, assignBuzzer, assignJoinerToTeam, toggleHold,
+  unassignPhone,
 } from '../src/ui/room.js';
 import { resetState, makeQ } from './helpers.js';
 
@@ -264,6 +265,40 @@ describe('assign joiner to a TEAM (new roster player)', () => {
     assignJoinerToTeam('Sky', 'a');
     expect(awardPreselect()).toBe(true);
     expect(state.teamA.players).toEqual([{ name: 'Sky', points: 10 }]);
+  });
+});
+
+describe('unlinking a wrong prefix guess', () => {
+  it('pins the joiner unmatched so they can be added as their own player', async () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    state.room.connected = ['Hansen'];
+    renderGame();
+    handleRemoteBuzz('Hansen'); // prefix tier guesses Hansen Jin
+    await tick();
+    expect(state.room.preselect).toMatchObject({ playerName: 'Hansen Jin' });
+    dismissPreselect();
+    await tick();
+    unassignPhone('Hansen'); // host: not them
+    await tick();
+    expect(state.room.nameMap.Hansen).toBeNull();
+
+    handleRemoteBuzz('Hansen'); // no re-guess — click-to-assign instead
+    await tick();
+    expect(state.room.preselect).toMatchObject({ joinName: 'Hansen', unmatched: true });
+    assignJoinerToTeam('Hansen', 'b');
+    await tick();
+    expect(state.teamB.players.at(-1)).toMatchObject({ name: 'Hansen', points: 0 });
+    expect(state.room.preselect).toMatchObject({ team: 'b', playerName: 'Hansen' });
+    expect(state.teamA.players.some((p) => p.name === 'Hansen')).toBe(false);
+  });
+
+  it('a joiner exactly named after a roster player is untouched by someone else\'s pin', async () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    state.room.connected = ['Hansen', 'Hansen Jin'];
+    renderGame();
+    handleRemoteBuzz('Hansen Jin');
+    await tick();
+    expect(state.room.preselect).toMatchObject({ team: 'a', playerName: 'Hansen Jin' });
   });
 });
 

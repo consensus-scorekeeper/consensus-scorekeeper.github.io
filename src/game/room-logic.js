@@ -50,9 +50,16 @@ function normName(s) {
 // explicit assignment map (join name -> roster player NAME — stored by
 // name, not index, so drag-reorder can't stale it), then normalized
 // exact match, then a unique-prefix match ("kim" -> "Kim Lee", or
-// "kimberly l" -> "Kimberly"). Ambiguous or no match -> null (the host
-// gets a click-to-assign affordance). Duplicate roster names: first
-// match wins.
+// "kimberly l" -> "Kimberly"). The prefix tier never claims a roster
+// player who plainly belongs to a DIFFERENT joiner — one whose exact
+// name is another connected phone, or one another join name is
+// explicitly assigned to — so a "Hansen" can't collapse into a
+// "Hansen Jin" who has their own phone. A null nameMap entry is a host
+// pin ("not who you guessed", set by the panel's unlink button): it
+// disables the prefix tier for that join name until an explicit
+// assignment replaces it. Ambiguous or no match -> null (the host gets
+// a click-to-assign affordance). Duplicate roster names: first match
+// wins.
 export function matchNameToRoster(joinName, state, nameMap = {}) {
   const jn = normName(joinName);
   if (!jn) return null;
@@ -72,7 +79,16 @@ export function matchNameToRoster(joinName, state, nameMap = {}) {
   }
   const exact = hits((n) => n === jn);
   if (exact.length) return exact[0];
-  const prefix = hits((n) => n.startsWith(jn) || jn.startsWith(n));
+  if (joinName in nameMap && !mapped) return null; // host pin: no guessing
+  const claimed = new Set();
+  for (const other of (state.room && state.room.connected) || []) {
+    const on = normName(other);
+    if (on !== jn) claimed.add(on);
+  }
+  for (const [other, rosterName] of Object.entries(nameMap)) {
+    if (rosterName && normName(other) !== jn) claimed.add(normName(rosterName));
+  }
+  const prefix = hits((n) => !claimed.has(n) && (n.startsWith(jn) || jn.startsWith(n)));
   if (prefix.length === 1) return prefix[0];
   return null;
 }

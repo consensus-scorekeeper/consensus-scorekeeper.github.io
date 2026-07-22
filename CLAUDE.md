@@ -641,7 +641,12 @@ in the scoreboard.
   part count).
 - **A winning buzz preselects, never scores.** The DO closes the gate,
   the host matches the join name to the roster (`matchNameToRoster`,
-  explicit assignments stored by NAME in `state.room.nameMap`) and shows
+  explicit assignments stored by NAME in `state.room.nameMap`; the
+  fuzzy prefix tier never claims a roster player who is a different
+  connected joiner — "Hansen" can't collapse into a "Hansen Jin" with
+  their own phone — and the room panel's × unlinks a wrong guess by
+  pinning the join name as a null nameMap entry, which disables fuzzy
+  matching for it until an explicit assignment) and shows
   a banner + row highlight; Space/Enter awards (+10 / +5 streak), Esc
   dismisses and re-opens, any other scoring path clears it, unmatched
   names are either linked to an existing player (click their row) or

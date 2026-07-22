@@ -102,6 +102,31 @@ describe('matchNameToRoster', () => {
     reorderPlayer('b', 1, 0);
     expect(matchNameToRoster('phone7', state, nameMap)).toEqual({ team: 'b', playerIndex: 0, playerName: 'Kai' });
   });
+
+  it('never prefix-collapses onto a roster player who is a different connected joiner', () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    state.room.connected = ['Hansen', 'Hansen Jin'];
+    expect(matchNameToRoster('Hansen', state)).toBeNull();
+    expect(matchNameToRoster('Hansen Jin', state)).toEqual({ team: 'a', playerIndex: 2, playerName: 'Hansen Jin' });
+  });
+
+  it('still prefix-matches when the full-named player has no phone of their own', () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    state.room.connected = ['Hansen'];
+    expect(matchNameToRoster('Hansen', state)).toEqual({ team: 'a', playerIndex: 2, playerName: 'Hansen Jin' });
+  });
+
+  it('never prefix-claims a roster player another join name is explicitly assigned to', () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    expect(matchNameToRoster('Hansen', state, { phone3: 'Hansen Jin' })).toBeNull();
+  });
+
+  it('a null nameMap pin blocks prefix guessing but not an exact match', () => {
+    state.teamA.players.push({ name: 'Hansen Jin', points: 0 });
+    expect(matchNameToRoster('Hansen', state, { Hansen: null })).toBeNull();
+    state.teamB.players.push({ name: 'Hansen', points: 0 });
+    expect(matchNameToRoster('Hansen', state, { Hansen: null })).toEqual({ team: 'b', playerIndex: 2, playerName: 'Hansen' });
+  });
 });
 
 describe('buildQlog', () => {

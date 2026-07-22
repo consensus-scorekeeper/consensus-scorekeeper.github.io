@@ -121,8 +121,14 @@ export function toggleHold() {
   rerender();
 }
 
+// "Not them": pin the join name as unmatched. Clears any explicit
+// assignment AND stops the prefix matcher from re-guessing the same
+// wrong player (the pin is a null nameMap entry — see
+// matchNameToRoster). The next explicit assignment (+ team button,
+// click-to-assign) replaces the pin; an exact roster-name match still
+// applies, so pinning never breaks a correctly-named joiner.
 export function unassignPhone(joinName) {
-  delete state.room.nameMap[joinName];
+  state.room.nameMap[joinName] = null;
   rerender();
 }
 
@@ -337,14 +343,15 @@ function renderRoomUI() {
   }
   const joiners = state.room.connected.map((n) => {
     const m = matchNameToRoster(n, state, state.room.nameMap);
+    // Every matched joiner gets the unlink × — a prefix-tier guess can be
+    // wrong ("Hansen" -> "Hansen Jin"), and without it a bad match is a
+    // dead end (the + buttons refuse names that "already match").
     const status = m
       ? `&rarr; ${escapeHtml(m.playerName)} (${m.team === 'a' ? escapeHtml(state.teamA.name) : escapeHtml(state.teamB.name)})`
+        + ` <button class="btn room-x" data-action="room-unassign" data-name="${escapeHtml(n)}" title="Not ${escapeHtml(m.playerName)} — unlink">&times;</button>`
       : `<button class="btn room-x" data-action="room-join-team" data-name="${escapeHtml(n)}" data-team="a" title="Add as a new player on ${escapeHtml(state.teamA.name)}">+ ${escapeHtml(state.teamA.name)}</button>`
         + ` <button class="btn room-x" data-action="room-join-team" data-name="${escapeHtml(n)}" data-team="b" title="Add as a new player on ${escapeHtml(state.teamB.name)}">+ ${escapeHtml(state.teamB.name)}</button>`;
-    const unassign = state.room.nameMap[n]
-      ? ` <button class="btn room-x" data-action="room-unassign" data-name="${escapeHtml(n)}" title="Forget this assignment">&times;</button>`
-      : '';
-    return `<div class="room-phone">${escapeHtml(n)} ${status}${unassign}</div>`;
+    return `<div class="room-phone">${escapeHtml(n)} ${status}</div>`;
   }).join('') || '<div class="room-hint">No players connected yet.</div>';
   body.innerHTML = `
     <div class="room-code-row">Room <strong class="room-code">${escapeHtml(state.room.code)}</strong>
