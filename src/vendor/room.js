@@ -19,10 +19,15 @@ export async function createRoom(server = DEFAULT_SERVER) {
 
 /**
  * Connect as host. handlers: {onBuzz(name), onBuzzPending(name),
- * onJoin(name), onLeave(name), onOpen(), onClose()}. onBuzzPending fires
- * the instant the server's buzz window opens (first arrival — stop
- * reading NOW); onBuzz follows with the latency-equalized winner, who
- * may differ. Reconnects automatically until close() is called.
+ * onAnswer(name, text), onJoin(name), onLeave(name), onOpen(),
+ * onClose(), onMessage(m)}. onBuzzPending fires the instant the
+ * server's buzz window opens (first arrival — stop reading NOW); onBuzz
+ * follows with the latency-equalized winner, who may differ. onAnswer
+ * carries a player's typed answer. onMessage (optional, additive July
+ * 2026) receives every message no earlier branch consumed — the audio
+ * broadcast protocol (sync/audio_*, SPEC.md) arrives here; consumers
+ * that don't set it keep the old ignore-unknowns behavior. Reconnects
+ * automatically until close() is called.
  */
 export function connectHost(code, handlers, server = DEFAULT_SERVER) {
   const wsUrl = server.replace(/^http/, 'ws') + `/rooms/${code}/ws?name=host&role=host`;
@@ -37,6 +42,7 @@ export function connectHost(code, handlers, server = DEFAULT_SERVER) {
       try { m = JSON.parse(e.data); } catch (err) { return; }
       if (m.t === 'buzz') handlers.onBuzz?.(m.name);
       else if (m.t === 'buzz_pending') handlers.onBuzzPending?.(m.name);
+      else if (m.t === 'answer') handlers.onAnswer?.(m.name, m.text);
       else if (m.t === 'join' && m.role === 'player') handlers.onJoin?.(m.name);
       else if (m.t === 'leave' && m.role === 'player') handlers.onLeave?.(m.name);
       else if (m.t === 'welcome') {
@@ -44,6 +50,7 @@ export function connectHost(code, handlers, server = DEFAULT_SERVER) {
           if (r.role === 'player') handlers.onJoin?.(r.name);
         }
       }
+      else handlers.onMessage?.(m);
     };
     ws.onclose = () => {
       handlers.onClose?.();
