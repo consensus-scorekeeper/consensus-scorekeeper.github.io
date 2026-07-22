@@ -94,7 +94,10 @@ export async function createAndJoinRoom() {
 
 export function closeRoom() {
   if (!room) return;
-  try { room.send({ t: 'disarm' }); } catch (e) { /* closing */ }
+  // 'close' ends the room server-side ({t:'closed'} broadcast, sockets
+  // dropped, code back in the pool); the disarm stays as the fallback
+  // for an old worker that ignores unknown host messages.
+  try { room.send({ t: 'disarm' }); room.send({ t: 'close' }); } catch (e) { /* closing */ }
   room.close();
   room = null;
   wsUp = false;

@@ -143,6 +143,7 @@ if (localStorage.consensusRoomName) $('name').value = localStorage.consensusRoom
 
 let ws = null, me = '', code = '', armed = false, mineBuzz = false;
 let sentBuzz = false; // optimistic: our buzz is in flight, verdict pending
+let roomClosed = false; // host ended the room: stop reconnecting
 let snapshot = null, qlog = [];
 
 if (watch) {
@@ -171,6 +172,7 @@ function join() {
 }
 
 function connect() {
+  roomClosed = false;   // a fresh join after a closed room reconnects again
   const url = server.replace(/^http/, 'ws') +
     '/rooms/' + code + '/ws?role=player&name=' + encodeURIComponent(me);
   ws = new WebSocket(url);
@@ -198,9 +200,18 @@ function connect() {
       renderBuzz(m.name);
     }
     else if (m.t === 'rejected') { sentBuzz = false; renderBuzz(); }
+    else if (m.t === 'closed') {
+      // Host ended the room: stop reconnecting, back to the join screen.
+      roomClosed = true;
+      try { ws.close(); } catch (err) {}
+      $('game').style.display = 'none';
+      $('join').style.display = '';
+      $('joinerr').textContent = 'room closed';
+    }
     else if (m.t === 'state') { snapshot = m.snapshot; renderAll(); }
   };
   ws.onclose = () => {
+    if (roomClosed) return;
     $('conn').textContent = '○ reconnecting…';
     $('conn').className = 'bad';
     setTimeout(connect, 2000);
