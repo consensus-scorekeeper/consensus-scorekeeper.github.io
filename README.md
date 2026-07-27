@@ -56,7 +56,7 @@ Open **📱 Buzzers** in the scoreboard and click **Create room** — you get a 
 
 There's also a **spectator link** — the same page without the buzz button — which is the remote version of the Pop Out scoreboard, and a **Hold buzzers** checkbox for when you need the room quiet. Jailbreak lockouts and streak scoring behave the way they do at the table: locked players' buzzes are ignored (buzzers re-open automatically), and streaks stay open for both teams.
 
-Rooms run on a free shared Cloudflare Worker and expire on their own after 12 hours of inactivity. Nothing about your game leaves your browser except the scoreboard the players see. Self-hosters can deploy their own room server (it ships with [qb-moderator](https://github.com/qbsuite/qb-moderator)) and point the app at it with `?roomserver=`.
+Rooms run on a free shared Cloudflare Worker and expire on their own after 12 hours of inactivity. Nothing about your game leaves your browser except the scoreboard the players see. Self-hosters can deploy their own room server (it ships with [qb-scorekeeper](https://github.com/qbsuite/qb-scorekeeper)) and point the app at it with `?roomserver=`.
 
 ## Tournament Mode
 

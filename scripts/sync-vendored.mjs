@@ -16,7 +16,7 @@ const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 export const VENDORED = [
   {
     vendored: 'src/vendor/room.js',
-    canonical: '../qb-moderator/app/room.js',
+    canonical: '../qb-scorekeeper/app/room.js',
   },
 ];
 

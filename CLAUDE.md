@@ -165,7 +165,7 @@ src/
                           rawFileUrl (SHA-pinned), previewBannerText
   vendor/
     room.js             ← VENDORED room client (createRoom/connectHost) — canonical
-                          copy lives in ../qb-moderator/app/room.js. NEVER edit here:
+                          copy lives in ../qb-scorekeeper/app/room.js. NEVER edit here:
                           change it there, then `npm run sync-vendored`
                           (tests/vendor-sync.test.js enforces byte-equality)
 assets/
@@ -613,12 +613,12 @@ without the buzz button (the remote equivalent of the pop-out
 scoreboard). The moderator creates a room from the 📱 Buzzers dropdown
 in the scoreboard.
 
-- **Server**: the qb-moderator room server — a host-authoritative relay
+- **Server**: the qb-scorekeeper room server — a host-authoritative relay
   (one Cloudflare Durable Object per room doing atomic first-buzz
   arbitration + fan-out + late-join snapshots; it never inspects our
   payloads). Default instance `qb-rooms.denisliu10.workers.dev` (free
   plan, rooms self-destruct after 12h idle); self-host by deploying
-  `qb-moderator/rooms/` and setting `?roomserver=` or
+  `qb-scorekeeper/rooms/` and setting `?roomserver=` or
   `localStorage['consensus-room-server']`.
 - **Frozen protocol**: player→DO `{t:'buzz'}` / `{t:'pong',n,ts}`;
   host→DO `{t:'state',snapshot}` / `{t:'arm'}` / `{t:'disarm'}` /
@@ -629,7 +629,7 @@ in the scoreboard.
   short collection window by estimated press time (arrival − RTT/2,
   capped) — remote players race host-local ones fairly. The client
   (`src/vendor/room.js`) is vendored byte-identical from
-  `../qb-moderator/app/room.js` — protocol/API changes land THERE
+  `../qb-scorekeeper/app/room.js` — protocol/API changes land THERE
   first (see its SPEC.md, which names this repo as a consumer).
 - **Game state never leaves this app.** `renderGame` → `syncRoom()`
   pushes the shared `getScoreboardSnapshot()` (same object the popout
@@ -715,7 +715,7 @@ transparent to tests. Notable test files:
 - `scoreboard-snapshot.test.js`    — the shared popout/rooms snapshot shape + the
                                      streak no-leak rule
 - `vendor-sync.test.js`            — src/vendor/ byte-identical to canonical sibling
-                                     checkouts (skips when ../qb-moderator is absent)
+                                     checkouts (skips when ../qb-scorekeeper is absent)
 - `rooms.e2e.mjs`                  — NOT vitest/CI: live protocol check against the
                                      deployed room server via the vendored client
                                      (`node tests/rooms.e2e.mjs`)

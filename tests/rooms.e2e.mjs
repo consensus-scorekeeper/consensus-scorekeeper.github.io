@@ -26,7 +26,7 @@ function connectPlayer(code, name) {
   ws.onmessage = (e) => {
     const m = JSON.parse(e.data);
     // Echo RTT probes like player.html does (feeds the server's
-    // latency-equalized arbitration; see qb-moderator SPEC.md).
+    // latency-equalized arbitration; see qb-scorekeeper SPEC.md).
     if (m.t === 'ping') { ws.send(JSON.stringify({ t: 'pong', n: m.n, ts: m.ts })); return; }
     ws.got.push(m);
   };

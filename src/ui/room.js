@@ -3,7 +3,7 @@
 // (buzz button + live scoreboard + past questions); this module runs on
 // the moderator's machine as the room host.
 //
-// Architecture (shared with qb-moderator, whose deployed worker we use):
+// Architecture (shared with qb-scorekeeper, whose deployed worker we use):
 // the room server is a dumb host-authoritative relay — one Durable
 // Object per room doing atomic first-buzz arbitration and fan-out. The
 // game state stays entirely in this app; we push a display snapshot
@@ -14,7 +14,7 @@
 // awards, Esc dismisses); nothing is ever auto-scored.
 //
 // The room client (src/vendor/room.js) is vendored byte-identical from
-// ../qb-moderator/app/room.js — never edit it here.
+// ../qb-scorekeeper/app/room.js — never edit it here.
 
 import { state, addPoints, addRosterPlayer } from '../state.js';
 import { createRoom, connectHost } from '../vendor/room.js';
@@ -33,7 +33,7 @@ let lastSentQlog = null;   // JSON of the last pushed qlog
 let lastHistoryLen = 0;    // any scoring change clears the preselect
 
 // Self-hosters can point at their own worker deployment (same escape
-// hatch as qb-moderator): ?roomserver= wins, then localStorage.
+// hatch as qb-scorekeeper): ?roomserver= wins, then localStorage.
 function serverOverride() {
   const p = new URLSearchParams(location.search).get('roomserver');
   if (p) return p;
@@ -137,7 +137,7 @@ export function unassignPhone(joinName) {
 // The DO closed the gate for a buzz we won't act on (spectator, hold,
 // locked-out player, already-answered question). Reopen it without
 // bothering the moderator: forcing the diff guard makes syncRoom resend
-// {t:'arm'} — the same silent re-arm qb-moderator uses for lockouts.
+// {t:'arm'} — the same silent re-arm qb-scorekeeper uses for lockouts.
 function silentRearm() {
   lastSentArmed = null;
   syncRoom();

@@ -8,7 +8,7 @@
   Phone page for the buzzer rooms (see src/ui/room.js on the host side).
   Self-contained on purpose: no module imports, works from any static
   host. Joins the room server (same relay protocol + default instance as
-  qb-moderator; the DO never inspects our snapshot/qlog payloads) as a
+  qb-scorekeeper; the DO never inspects our snapshot/qlog payloads) as a
   player, renders the host's scoreboard snapshot + past-questions log,
   and sends exactly one message kind: {t:'buzz'}.
 
