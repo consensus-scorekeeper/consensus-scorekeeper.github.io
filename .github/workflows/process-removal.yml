@@ -1,0 +1,64 @@
+# Handles "Remove game" issues filed by the submit-relay Worker after it
+# verified the tournament's publishing key (docs/submission-relay.md).
+# scripts/process-removal.mjs re-checks everything (relay-bot author,
+# verification stamp, bare-basename filename) and deletes the CSV in the
+# checkout; this workflow regenerates the manifest and commits straight
+# to main — removals are verified-only, so there's no review PR, and the
+# manifest must ride in the same commit because a GITHUB_TOKEN push does
+# not trigger update-manifest.yml.
+
+name: Process game removal
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  remove:
+    if: contains(github.event.issue.labels.*.name, 'game-removal')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Validate request and delete the CSV
+        id: process
+        env:
+          RELAY_BOT_LOGIN: ${{ vars.RELAY_BOT_LOGIN || 'consensus-submit-relay[bot]' }}
+        run: node scripts/process-removal.mjs
+
+      - name: Commit the removal
+        if: steps.process.outputs.status == 'ok'
+        env:
+          ISSUE: ${{ github.event.issue.number }}
+          SLUG: ${{ steps.process.outputs.slug }}
+        run: |
+          python3 scripts/update_manifests.py
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add "tournaments/$SLUG/results"
+          git commit -m "Remove published game via #$ISSUE"
+          # Another workflow may have pushed to main since checkout.
+          git pull --rebase origin main
+          git push origin main
+
+      - name: Report back and close the issue
+        if: always() && steps.process.outputs.status != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          STATUS: ${{ steps.process.outputs.status }}
+        run: |
+          gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/summary.md"
+          if [ "$STATUS" = "ok" ]; then
+            gh issue close "$ISSUE" --reason completed
+          else
+            gh issue close "$ISSUE" --reason 'not planned'
+          fi

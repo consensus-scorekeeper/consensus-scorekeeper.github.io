@@ -1389,3 +1389,48 @@ body {
 .room-phone { padding: 3px 0; font-size: 0.9rem; border-bottom: 1px solid #eee; }
 .room-unassigned { color: #b45309; font-style: italic; }
 .room-x { padding: 0 8px; font-size: 0.85rem; }
+
+/* ==================== SUBMISSION MODAL (ui/submission-form.js) ==================== */
+/* Rides on the shared .format-modal classes; these are its extras. Used
+   on the stats pages, the hub, and the scorekeeper alike. */
+
+.submission-card { max-width: 560px; }
+.submission-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  font-size: 0.95rem;
+  margin-bottom: 10px;
+}
+.submission-input:focus { outline: 2px solid #2563eb; outline-offset: 1px; }
+.submission-input[readonly] { background: #f1f5f9; color: #475569; }
+.submission-optional { font-weight: normal; color: #64748b; font-size: 0.82rem; }
+.submission-file-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 12px;
+  flex-wrap: wrap;
+}
+.submission-file-btn { cursor: pointer; }
+.submission-validation { font-size: 0.85rem; color: #555; }
+.submission-validation.success { color: #2e7d32; }
+.submission-validation.error { color: #c00; }
+.submission-fallback { font-size: 0.85rem; color: #64748b; margin: 10px 0 0; }
+.submission-key-box {
+  background: #fefce8;
+  border: 1px solid #eab308;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin: 12px 0;
+  font-size: 0.9rem;
+}
+.submission-key-row { display: flex; gap: 8px; }
+.submission-key-row .submission-input { margin-bottom: 0; font-family: monospace; }
+#sf-turnstile:not(:empty) { margin-bottom: 10px; }
+
+/* "Remove this game" (key holders only) on the stats game view. */
+.ts-remove-game-row { margin-top: 14px; }
+.ts-remove-note { font-size: 0.85rem; color: #64748b; }

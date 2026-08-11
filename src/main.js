@@ -52,6 +52,8 @@ import {
 import { escapeHtml, csvEscape } from './util/escape.js';
 import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
 import { downloadTextFile } from './ui/download.js';
+import { openSubmissionForm } from './ui/submission-form.js';
+import { relayEnabled } from './util/submit-relay.js';
 import { setupSplitters } from './ui/splitter.js';
 import {
   viewPack,
@@ -147,6 +149,26 @@ function exportCsv() {
   downloadTextFile(buildResultsFilename(state), '﻿' + csv, 'text/csv;charset=utf-8;');
 }
 
+// One-click publish: the submission modal with this game's CSV prefilled
+// (no export/re-upload round trip). The published tournament's slug isn't
+// derivable from local state — custom-tournament slugs are device-local —
+// so the last slug submitted from this device is remembered instead.
+// The button is revealed at startup only when the relay is configured.
+const LAST_SUBMIT_SLUG_KEY = 'consensus-last-submit-slug-v1';
+function submitResults() {
+  let lastSlug = '';
+  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
+  openSubmissionForm({
+    slug: lastSlug,
+    csv: buildResultsCsv(state),
+    onDone: ({ slug }) => {
+      try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+    },
+  });
+}
+const submitResultsBtn = document.getElementById('submit-results-btn');
+if (submitResultsBtn) submitResultsBtn.hidden = !relayEnabled();
+
 // loadState restores the last session's data from localStorage but always
 // lands on the setup screen — re-entering the game is an explicit Resume
 // Game click, never a side effect of a page refresh. Lives here because it
@@ -240,6 +262,7 @@ const ACTION_HANDLERS = {
   'undo-last': () => undoLast(),
   'toggle-inline-pdf': () => toggleInlinePdf(),
   'export-csv': () => exportCsv(),
+  'submit-results': () => submitResults(),
   'reparse-current-pdf': () => reparseCurrentPdf(),
   'back-to-setup': () => { backToSetup(); updateSessionButtons(); },
   ...rosterManagerActions,

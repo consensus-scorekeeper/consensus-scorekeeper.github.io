@@ -36,6 +36,10 @@ jobs:
 
       - name: Validate and stage submitted CSVs
         id: process
+        env:
+          # The submit-relay Worker's bot login — issues it authored are
+          # eligible for key-verified auto-publish (docs/submission-relay.md).
+          RELAY_BOT_LOGIN: ${{ vars.RELAY_BOT_LOGIN || 'consensus-submit-relay[bot]' }}
         run: node scripts/process-submission.mjs
 
       - name: Create or update submission PR
@@ -96,7 +100,74 @@ jobs:
             echo ''
             echo "📊 [**Preview these stats now**]($PREVIEW_URL) — no need to wait for the merge. The preview always shows this submission's latest validated version; once merged, the games appear on the tournament's own stats page."
             echo 'PR_NOTE_EOF'
+            echo "pr_url=$PR_URL"
           } >> "$GITHUB_OUTPUT"
+
+      # Key-verified auto-publish (docs/submission-relay.md). The script
+      # only NOMINATES (verified=true when the relay bot authored the
+      # issue with a matching stamp); the actual gate is here — the diff
+      # wall: every file the PR changes must live in this slug's results
+      # folder. That structurally excludes new-tournament PRs (they touch
+      # roster-presets.js) and anything else code-shaped. The manifest is
+      # regenerated INTO the branch because a GITHUB_TOKEN merge won't
+      # trigger update-manifest.yml — with it, stats go live at the merge.
+      # Same reason finalize-submission.yml won't fire: the 🎉/close
+      # happens inline.
+      - name: Auto-publish verified submission
+        if: >-
+          steps.process.outputs.status == 'ok' &&
+          steps.process.outputs.verified == 'true' &&
+          steps.pr.outputs.pr_url != ''
+        id: auto
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ISSUE: ${{ github.event.issue.number }}
+          SLUG: ${{ steps.process.outputs.slug }}
+          PR_URL: ${{ steps.pr.outputs.pr_url }}
+        run: |
+          BRANCH="submission/issue-$ISSUE"
+          CHANGED=$(git diff --name-only origin/main...HEAD)
+          OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -v "^tournaments/$SLUG/results/" || true)
+          if [ -n "$OUTSIDE" ]; then
+            {
+              echo 'auto_note<<AUTO_NOTE_EOF'
+              echo '🔑 The publishing key checked out, but this submission changes files outside the tournament'\''s results folder, so it needs a maintainer merge:'
+              echo '```'
+              echo "$OUTSIDE"
+              echo '```'
+              echo 'AUTO_NOTE_EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          python3 scripts/update_manifests.py
+          if [ -n "$(git status --porcelain "tournaments/$SLUG/results")" ]; then
+            git add "tournaments/$SLUG/results"
+            git commit -m "Regenerate manifest for auto-published submission #$ISSUE"
+            git push origin "$BRANCH"
+          fi
+
+          if ! gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
+            {
+              echo 'auto_note<<AUTO_NOTE_EOF'
+              echo '⚠️ The publishing key checked out but the automatic merge failed — a maintainer will publish this manually:'
+              echo '```'
+              cat merge-error.txt
+              echo '```'
+              echo 'AUTO_NOTE_EOF'
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          STATS_URL="https://consensus-scorekeeper.github.io/tournaments/$SLUG/"
+          {
+            echo 'auto_note<<AUTO_NOTE_EOF'
+            echo "🎉 **Published automatically** (verified publishing key): $STATS_URL"
+            echo ''
+            echo '(If the games are not visible yet, give the site a couple of minutes to redeploy.)'
+            echo 'AUTO_NOTE_EOF'
+          } >> "$GITHUB_OUTPUT"
+          gh issue close "$ISSUE" --reason completed || true
 
       - name: Report back on the issue
         if: always() && steps.process.outputs.status != ''
@@ -104,8 +175,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
           PR_NOTE: ${{ steps.pr.outputs.pr_note }}
+          AUTO_NOTE: ${{ steps.auto.outputs.auto_note }}
         run: |
           if [ -n "$PR_NOTE" ]; then
             printf '\n%s\n' "$PR_NOTE" >> "$RUNNER_TEMP/summary.md"
+          fi
+          if [ -n "$AUTO_NOTE" ]; then
+            printf '\n%s\n' "$AUTO_NOTE" >> "$RUNNER_TEMP/summary.md"
           fi
           gh issue comment "$ISSUE" --body-file "$RUNNER_TEMP/summary.md"

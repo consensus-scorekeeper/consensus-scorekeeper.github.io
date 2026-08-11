@@ -22,6 +22,10 @@ permissions:
   issues: write
   pull-requests: read
 
+# RELAY_URL (repo variable) + RELAY_ADMIN_SECRET (repo secret) configure
+# the submit-relay Worker integration (docs/submission-relay.md); the
+# activation step below no-ops when they're unset.
+
 jobs:
   finalize:
     if: >-
@@ -72,3 +76,39 @@ jobs:
             gh issue comment "$ISSUE" --repo "$GITHUB_REPOSITORY" --body-file body.md
             gh issue close "$ISSUE" --repo "$GITHUB_REPOSITORY" --reason 'not planned' || true
           fi
+
+      # A merged submission that touched roster-presets.js created a NEW
+      # tournament. Its publishing key (minted by the submit-relay Worker
+      # when the submission was filed) sits in KV as status=pending until
+      # this activates it — so a key for a tournament the maintainer
+      # never approved can never verify anything.
+      - name: Activate the new tournament's publishing key
+        if: github.event.pull_request.merged == true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          RELAY_URL: ${{ vars.RELAY_URL }}
+          RELAY_ADMIN_SECRET: ${{ secrets.RELAY_ADMIN_SECRET }}
+        run: |
+          if [ -z "$RELAY_URL" ] || [ -z "$RELAY_ADMIN_SECRET" ]; then
+            echo "Relay not configured — skipping key activation."
+            exit 0
+          fi
+          if ! gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json files \
+              --jq '.files[].path' | grep -qx 'src/ui/roster-presets.js'; then
+            echo "Not a tournament-creation PR — nothing to activate."
+            exit 0
+          fi
+          SLUG=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json files \
+            --jq '[.files[].path | capture("^tournaments/(?<s>[^/]+)/results/")? | .s] | first // empty')
+          if [ -z "$SLUG" ]; then
+            echo "Could not read the slug off the PR's files — activate manually with /admin/activate."
+            exit 0
+          fi
+          # Activation failure shouldn't fail the finalize job (404 just
+          # means the tournament predates the relay / was created via the
+          # GitHub form — there is no key to activate).
+          curl -s -X POST "$RELAY_URL/admin/activate" \
+            -H "Authorization: Bearer $RELAY_ADMIN_SECRET" \
+            -H 'Content-Type: application/json' \
+            -d "{\"slug\":\"$SLUG\"}" || true

@@ -135,6 +135,52 @@ export function insertTournamentEntry(source, entryJson) {
   return source.slice(0, close) + '\n' + indented + ',' + source.slice(close);
 }
 
+// Remove a tournament's entry from roster-presets.js source text — the
+// inverse of insertTournamentEntry, used by scripts/remove_tournament.mjs.
+// Entries may be hand-written object literals or pipeline-inserted JSON,
+// so this walks the array's top-level entries by brace depth (quote-aware:
+// team/player names could contain braces) and drops the one whose slug
+// matches. Returns null if no entry has that slug.
+export function removeTournamentEntry(source, slug) {
+  const open = source.indexOf('export const TOURNAMENTS = [');
+  if (open === -1) throw new Error('TOURNAMENTS array not found in roster-presets.js');
+  const start = source.indexOf('[', open) + 1;
+  const close = source.indexOf('\n];', open);
+  if (close === -1) throw new Error('TOURNAMENTS array terminator not found');
+
+  let depth = 0;
+  let quote = null;
+  let entryStart = -1;
+  for (let i = start; i < close; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === '\\') i++;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'") { quote = ch; continue; }
+    if (ch === '{') {
+      if (depth === 0) entryStart = i;
+      depth++;
+    } else if (ch === '}') {
+      depth--;
+      if (depth === 0) {
+        const entry = source.slice(entryStart, i + 1);
+        const m = /["']?slug["']?\s*:\s*["']([^"']*)["']/.exec(entry);
+        if (m && m[1] === slug) {
+          // Take the trailing comma and surrounding blank space with it.
+          let end = i + 1;
+          if (source[end] === ',') end++;
+          let from = source.lastIndexOf('\n', entryStart);
+          if (from === -1) from = entryStart;
+          return source.slice(0, from) + source.slice(end);
+        }
+      }
+    }
+  }
+  return null;
+}
+
 // Turn an existing per-tournament stats page into one for a new slug.
 // Only the slug <meta> matters functionally (stats-main.js stamps the
 // heading at runtime); the static <title> is retargeted for bookmarks

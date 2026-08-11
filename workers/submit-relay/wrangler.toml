@@ -1,0 +1,23 @@
+name = "consensus-submit-relay"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# Deploy from this folder (wrangler bundles the ../../src/util imports):
+#   npx wrangler login
+#   npx wrangler kv namespace create KEYS   # once; paste the printed id below
+#   npx wrangler deploy
+# Then set the secrets — see README.md for the full setup (GitHub App etc.):
+#   npx wrangler secret put GITHUB_APP_KEY      # or GITHUB_TOKEN for a PAT
+#   npx wrangler secret put ADMIN_SECRET
+#   npx wrangler secret put TURNSTILE_SECRET    # optional
+
+[vars]
+REPO = "consensus-scorekeeper/consensus-scorekeeper.github.io"
+SITE_BASE = "https://consensus-scorekeeper.github.io"
+# GitHub App auth (unused when the GITHUB_TOKEN secret is set instead):
+GITHUB_APP_ID = ""
+GITHUB_INSTALLATION_ID = ""
+
+[[kv_namespaces]]
+binding = "KEYS"
+id = "034cfa5baa2a4c9692179b7f6340ebf2"

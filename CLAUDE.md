@@ -140,10 +140,17 @@ src/
                           + pending-submission preview overlay (loadPreview:
                           GitHub API + raw.githubusercontent fetches, banner)
     submission-links.js ← DOM builders for the submit-results / create-tournament
-                          links (both open the GitHub issue form via
-                          util/submit-results.js); submit-results on every
-                          per-tournament page (stats-main.js), create-tournament
-                          on the hub only (tournaments-main.js) — page-agnostic
+                          links; with the relay configured they open the in-page
+                          submission modal (ui/submission-form.js), otherwise the
+                          GitHub issue form (util/submit-results.js); submit-results
+                          on every per-tournament page (stats-main.js),
+                          create-tournament on the hub only (tournaments-main.js)
+                          — page-agnostic
+    submission-form.js  ← in-page submission modal (relay-backed, page-agnostic,
+                          builds its own DOM): slug/CSV/key fields, file attach,
+                          client-side pre-validation via the pipeline's own pure
+                          modules, Turnstile hook, success panel (preview link /
+                          published / new-tournament key handout)
     parse-report.js     ← renderParseReport: the "suspected parsing issues" panel under
                           the upload status (reads state.parseIssues)
   util/
@@ -159,6 +166,18 @@ src/
     submission.js       ← splitCsvBundle / gameIdentityKey / canonicalResultsFilename /
                           planSubmissionWrites: pure logic behind the results-submission
                           pipeline (consumed by scripts/process-submission.mjs)
+                          + removeTournamentEntry (inverse of insertTournamentEntry,
+                          used by scripts/remove_tournament.mjs)
+    relay-issue.js      ← THE Worker↔pipeline issue-body contract (docs/
+                          submission-relay.md): section parser (parseFormSections /
+                          stripCodeFence — also used on GitHub-form bodies), body
+                          builders, the position-anchored + injection-defanged
+                          "Relay verification" stamp, publishing-key generate/hash
+    submit-relay.js     ← client for the submit-relay Worker: SUBMIT_RELAY_BASE
+                          ('' disables the whole in-app submission feature, like
+                          PACK_PROXY_BASE), TURNSTILE_SITE_KEY, per-slug
+                          publishing-key localStorage
+                          (consensus-tournament-keys-v1), submit/remove calls
     submission-preview.js ← pure logic behind the pending-submission preview:
                           resolvePreviewContext (meta/query slug + ?preview=),
                           GitHub API URL builders, classifyPull, previewCsvFiles,
@@ -180,7 +199,13 @@ scripts/                ← helpers; run from anywhere (paths use __file__)
                                   parse-regression fixtures) — rerun ONLY when a parse-output
                                   change is intended, and review the JSON diff
   process-submission.mjs       ← Node (not Python): drives the results-submission Action;
-                                  imports src/util modules directly ("type": "module")
+                                  imports src/util modules directly ("type": "module");
+                                  also emits verified= for the auto-publish gate
+  process-removal.mjs          ← Node: drives the game-removal Action (relay-verified
+                                  deletions of published CSVs)
+  remove_tournament.mjs        ← Node: deletes tournaments/<slug>/ + its registry entry;
+                                  engine of the Remove-tournament workflow, also runnable
+                                  locally (node scripts/remove_tournament.mjs <slug>)
   sync-vendored.mjs            ← refreshes src/vendor/ from canonical sibling checkouts
                                   (`npm run sync-vendored`)
 workers/
@@ -188,14 +213,26 @@ workers/
                           (worker.js + wrangler.toml + README.md with deploy steps and
                           the security model); its deployed URL is PACK_PROXY_BASE in
                           src/ui/pack-browser.js
+  submit-relay/         ← Cloudflare Worker: files submission/removal issues for
+                          people without GitHub accounts + holds the publishing-key
+                          hashes (KV). Design/trust model: docs/submission-relay.md;
+                          deploy runbook: its README.md. Deployed URL goes in
+                          SUBMIT_RELAY_BASE (src/util/submit-relay.js) + the
+                          RELAY_URL repo Actions variable
 .github/
   ISSUE_TEMPLATE/
     submit-results.yml  ← public intake form for tournament results CSVs
   workflows/
     update-manifest.yml    ← auto-regenerates manifests on push (see below)
-    process-submission.yml ← issue-form submission → validated PR (see below)
+    process-submission.yml ← issue-form submission → validated PR (see below);
+                             + key-verified auto-publish (docs/submission-relay.md)
     finalize-submission.yml ← submission PR merged/closed → resolves the
-                              originating issue (see below)
+                              originating issue (see below); + activates a new
+                              tournament's pending publishing key on merge
+    process-removal.yml    ← game-removal issues (relay-verified) → delete CSV +
+                             manifest, commit straight to main, close issue
+    remove-tournament.yml  ← maintainer-only workflow_dispatch: slug → deletes the
+                             tournament (folder + registry + relay key hash)
 tests/                  ← vitest tests; run with `npm test`
 ```
 
@@ -563,6 +600,40 @@ whenever a fresh PR results, so open issue ⟺ pending submission.
 Fork PRs can't spoof this: the workflow requires a same-repo head and
 the `results-submission` label on the referenced issue.
 
+### Submit-relay: in-app submissions, publishing keys, auto-publish
+
+**docs/submission-relay.md is the source of truth** for this layer; short
+version: the `workers/submit-relay/` Cloudflare Worker is a second front
+door to the pipeline above for people *without* GitHub accounts. The
+in-page modal (`ui/submission-form.js`, opened by the submission links and
+the scorekeeper's Submit Results button) POSTs to the Worker, which
+validates the CSVs with the site's own modules and files the issue itself,
+rendered via `util/relay-issue.js` so the body format can't drift from the
+parser (round-trip-tested in `tests/relay-issue.test.js`). With
+`SUBMIT_RELAY_BASE` empty (`util/submit-relay.js`) the whole feature is
+off and every link falls back to the GitHub form.
+
+Trust is a per-tournament **publishing key** (minted when a tournament is
+created, `pending` until its creation PR merges, hash-only in Worker KV).
+A key-verified submission gets a position-anchored "Relay verification"
+stamp and `process-submission.yml` auto-merges it — but only behind the
+**diff wall**: every changed file must be inside that slug's `results/`
+folder (checked against the real git diff), which structurally forces
+new-tournament PRs (they touch `roster-presets.js`) to a human merge.
+Author wall: the stamp only counts on issues authored by the relay's bot
+login (`RELAY_BOT_LOGIN`, default `consensus-submit-relay[bot]`). An
+`auto-hold` label on the issue forces manual review. Two GITHUB_TOKEN
+quirks are load-bearing: token-driven merges/pushes trigger no workflows,
+so the auto-publish path regenerates the manifest INTO the branch and
+posts the 🎉/close inline, and `process-removal.yml` commits its manifest
+in the same push.
+
+Key-verified extras: "Remove this game" on the stats game view (fixes
+wrong-identity mistakes that content-identity replacement can't) and the
+maintainer-only Remove-tournament workflow (Actions tab), which must also
+delete the slug's KV key hash — a stale hash would let an old key publish
+into a future tournament reusing the slug.
+
 ### Pending-submission preview
 
 Submitters see their stats **before the maintainer merges** — no extra
@@ -702,6 +773,14 @@ transparent to tests. Notable test files:
                                      content-based game identity, replace-vs-add
 - `submit-results.test.js`         — submitResultsUrl targets the canonical repo's
                                      issue form with the slug prefilled
+- `relay-issue.test.js`            — the Worker↔pipeline issue-body contract: builder→parser
+                                     round trips, stamp anti-forgery (defang + position anchor),
+                                     publishing-key generate/hash
+- `submit-relay-worker.test.js`    — the Worker itself (mocked KV/GitHub/site): key state
+                                     machine (fresh→pending→active), verified stamping,
+                                     removal + admin endpoints, abuse gates
+- `remove-tournament.test.js`      — removeTournamentEntry on both entry styles + against
+                                     the real registry; inverse-of-insert property
 - `submission-preview.test.js`     — pending-submission preview logic: context
                                      resolution (meta vs ?slug=, validation), API URL
                                      builders, PR classification, changed-file

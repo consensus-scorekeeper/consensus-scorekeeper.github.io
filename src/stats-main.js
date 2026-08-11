@@ -78,6 +78,7 @@ if (slug) {
   setupTournamentStats({
     manifestUrl,
     preview: issue ? { issue, slug } : null,
+    slug,
   });
 } else {
   // preview.html opened without a valid ?slug= — nothing to load.

@@ -27,6 +27,7 @@ import {
   rawFileUrl,
   previewBannerText,
 } from '../util/submission-preview.js';
+import { relayEnabled, getPublishingKey, removeGame } from '../util/submit-relay.js';
 
 const tsState = {
   games: [],                      // [{ id, packet, teamA, teamB, scoreA, scoreB, winner, exportedAt, players }]
@@ -35,6 +36,7 @@ const tsState = {
   selectedPlayer: null,           // player name (string) when view === 'player'
   selectedGameId: null,           // game id (string) when view === 'game'
   loading: false,                 // true while loadFromManifest is in flight
+  slug: '',                       // this page's tournament slug (for relay game removal)
 };
 
 function setStatus(msg, kind) {
@@ -416,6 +418,16 @@ function renderGameView() {
   if (tsState.selectedPlayer) {
     crumbs.push(`<a data-action="ts-show-player" data-team="${escapeHtml(tsState.selectedTeam)}" data-player="${escapeHtml(tsState.selectedPlayer)}">${escapeHtml(tsState.selectedPlayer)}</a>`);
   }
+  // Publishing-key holders (TDs/moderators, key stored after their first
+  // verified submission) can retract a published game from here — the fix
+  // for wrong-identity mistakes (wrong team/packet name), where a corrected
+  // re-submission would otherwise land as a duplicate instead of replacing.
+  const removable = relayEnabled() && tsState.slug && getPublishingKey(tsState.slug);
+  const removeRow = removable ? `
+    <div class="ts-remove-game-row">
+      <button class="btn" data-action="ts-remove-game" data-game-id="${escapeHtml(game.id)}">Remove this game</button>
+      <span class="ts-remove-note" id="ts-remove-note">Unpublishes it from this page (needs this tournament's publishing key). Resubmit any time.</span>
+    </div>` : '';
   return `
     <div class="ts-breadcrumbs">${crumbs.join(' · ')}</div>
     <h3>${escapeHtml(game.packet || 'Game')}</h3>
@@ -426,7 +438,24 @@ function renderGameView() {
     <div class="ts-grid">
       ${tableFor(game.teamA, game.scoreA)}
       ${tableFor(game.teamB, game.scoreB)}
-    </div>`;
+    </div>${removeRow}`;
+}
+
+async function removePublishedGame(button, gameId) {
+  const game = tsState.games.find((g) => g.id === gameId);
+  if (!game) return;
+  if (!confirm(`Remove "${game.packet || 'this game'}" — ${game.teamA} vs ${game.teamB} — from the published stats?`)) {
+    return;
+  }
+  button.disabled = true;
+  const note = document.getElementById('ts-remove-note');
+  const result = await removeGame({ slug: tsState.slug, filename: gameId });
+  if (result.ok) {
+    if (note) note.textContent = '🗑️ Removal submitted — this page updates in a couple of minutes.';
+  } else {
+    button.disabled = false;
+    if (note) note.textContent = `⚠️ ${result.data.error || 'Removal failed — try again.'}`;
+  }
 }
 
 function render() {
@@ -449,7 +478,10 @@ function render() {
 
 // preview (optional): { issue, slug } — overlay the games from that
 // issue's unmerged submission PR after the published manifest loads.
-export function setupTournamentStats({ manifestUrl, preview } = {}) {
+// slug (optional): this page's tournament — enables the publishing-key
+// game-removal action on the game view when the relay is configured.
+export function setupTournamentStats({ manifestUrl, preview, slug } = {}) {
+  tsState.slug = slug || '';
   // Delegated click handler for the in-page navigation (drill into team /
   // player / game views). Bound to a stable section parent so it survives
   // re-renders of #ts-content.
@@ -463,6 +495,7 @@ export function setupTournamentStats({ manifestUrl, preview } = {}) {
       else if (action === 'ts-show-team')      showTeam(target.dataset.team);
       else if (action === 'ts-show-player')    showPlayer(target.dataset.team, target.dataset.player);
       else if (action === 'ts-show-game')      showGame(target.dataset.gameId);
+      else if (action === 'ts-remove-game')    removePublishedGame(target, target.dataset.gameId);
     });
   }
   // If a manifest is configured, paint the loading state BEFORE the fetch

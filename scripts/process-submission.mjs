@@ -30,29 +30,13 @@ import {
   insertTournamentEntry,
   retargetTournamentPage,
 } from '../src/util/submission.js';
+import {
+  parseFormSections,
+  stripCodeFence,
+  parseVerifiedSlug,
+} from '../src/util/relay-issue.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-
-// ---------- issue-form body parsing ----------
-
-// Issue-form submissions render as "### <field label>\n\n<value>" blocks.
-// GitHub delivers issue bodies with \r\n line endings — normalize first.
-function parseFormSections(body) {
-  const sections = {};
-  const parts = String(body || '').replace(/\r\n/g, '\n').split(/^### +(.+?) *$/m);
-  for (let i = 1; i < parts.length; i += 2) {
-    let value = (parts[i + 1] || '').trim();
-    if (value === '_No response_') value = '';
-    sections[parts[i]] = value;
-  }
-  return sections;
-}
-
-// The "Results CSV" textarea uses `render: text`, so GitHub fences it.
-function stripCodeFence(text) {
-  const m = /^```[a-z]*\n([\s\S]*?)\n?```$/m.exec(String(text || '').trim());
-  return m ? m[1] : String(text || '');
-}
 
 // Attachment links GitHub inserts on drag-and-drop. Both the current
 // user-attachments form and the legacy per-repo /files/ form.
@@ -222,10 +206,32 @@ if (warnings.length > 0) {
   lines.push('', '**Warnings:**', ...warnings.map((w) => `- ⚠️ ${w}`));
 }
 
+// ---------- auto-publish verification (docs/submission-relay.md) ----------
+// A submission auto-merges only when ALL hold:
+//   - the issue was authored by the relay bot (only the Worker can do
+//     that, so its body — including the stamp — is Worker-rendered),
+//   - the position-anchored "Relay verification" stamp names this exact
+//     slug (the Worker only stamps after checking the publishing key),
+//   - it's not a new-tournament submission (those touch code and always
+//     get a human merge; the workflow's diff wall enforces this again),
+//   - no maintainer put the auto-hold label on the issue.
+// The workflow independently re-checks the PR's changed paths before
+// merging — verification here only *nominates* the PR for auto-merge.
+const relayBot = process.env.RELAY_BOT_LOGIN || 'consensus-submit-relay[bot]';
+const authorIsRelay = issue.user && issue.user.login === relayBot;
+const held = (issue.labels || []).some((l) => l.name === 'auto-hold');
+const verified =
+  errors.length === 0 &&
+  !isNewTournament &&
+  !held &&
+  authorIsRelay &&
+  parseVerifiedSlug(issue.body) === tournament.slug;
+
 fs.writeFileSync(path.join(process.env.RUNNER_TEMP, 'summary.md'), lines.join('\n') + '\n');
 fs.appendFileSync(
   process.env.GITHUB_OUTPUT,
   `status=${errors.length === 0 ? 'ok' : 'invalid'}\n` +
-  `slug=${tournament ? tournament.slug : ''}\n`
+  `slug=${tournament ? tournament.slug : ''}\n` +
+  `verified=${verified}\n`
 );
 console.log(lines.join('\n'));

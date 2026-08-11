@@ -1,0 +1,64 @@
+# Maintainer-only tournament removal (docs/submission-relay.md): Actions
+# tab → "Remove tournament" → type the slug → Run. Deletes the
+# tournaments/<slug>/ folder and the TOURNAMENTS registry entry
+# (scripts/remove_tournament.mjs), then deletes the slug's publishing-key
+# hash from the submit-relay Worker — an invariant, not housekeeping: a
+# stale hash would let the old tournament's key publish into a future
+# tournament that reuses the slug.
+#
+# workflow_dispatch is only runnable by users with write access, so
+# GitHub itself gates this — no extra auth needed.
+
+name: Remove tournament
+
+on:
+  workflow_dispatch:
+    inputs:
+      slug:
+        description: 'Tournament slug to remove (folder name under tournaments/)'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  remove:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Remove folder + registry entry
+        env:
+          SLUG: ${{ inputs.slug }}
+        run: node scripts/remove_tournament.mjs "$SLUG"
+
+      - name: Commit
+        env:
+          SLUG: ${{ inputs.slug }}
+        run: |
+          git config user.name  'github-actions[bot]'
+          git config user.email 'github-actions[bot]@users.noreply.github.com'
+          git add -A tournaments src/ui/roster-presets.js
+          git commit -m "Remove tournament $SLUG"
+          git pull --rebase origin main
+          git push origin main
+
+      - name: Delete the tournament's publishing key from the relay
+        env:
+          SLUG: ${{ inputs.slug }}
+          RELAY_URL: ${{ vars.RELAY_URL }}
+          RELAY_ADMIN_SECRET: ${{ secrets.RELAY_ADMIN_SECRET }}
+        run: |
+          if [ -z "$RELAY_URL" ] || [ -z "$RELAY_ADMIN_SECRET" ]; then
+            echo "Relay not configured (RELAY_URL var / RELAY_ADMIN_SECRET secret) — skipping key deletion."
+            exit 0
+          fi
+          curl -sf -X POST "$RELAY_URL/admin/delete-key" \
+            -H "Authorization: Bearer $RELAY_ADMIN_SECRET" \
+            -H 'Content-Type: application/json' \
+            -d "{\"slug\":\"$SLUG\"}"
