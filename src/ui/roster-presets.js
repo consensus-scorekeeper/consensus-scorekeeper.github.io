@@ -36,33 +36,7 @@ export const TOURNAMENTS = [
       { name: 'SF Individuals', players: ['Arjun Panickssery', 'Adam Kalinich', 'Ryan Panwar'] },
       { name: 'Dust of Snow', players: ['Lorie Au Yeung', 'Huy Lai', 'Doug Robeson'] },
     ],
-  },
-  {
-    "name": "Test Tournament",
-    "slug": "my-invitational",
-    "rosters": [
-      {
-        "name": "Team 1",
-        "players": [
-          "Hi",
-          "There",
-          "Hi There",
-          "D B",
-          "A Z",
-          "R F"
-        ]
-      },
-      {
-        "name": "Team 2",
-        "players": [
-          "Hii",
-          "Thereee",
-          "Im Dumb",
-          "Poor Chicken"
-        ]
-      }
-    ]
-  },
+  },
 ];
 
 export function getTournamentBySlug(slug) {
