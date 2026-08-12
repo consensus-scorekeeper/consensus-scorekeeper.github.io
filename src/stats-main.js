@@ -21,7 +21,7 @@ import { getTournamentBySlug } from './ui/roster-presets.js';
 import { submitResultsLink } from './ui/submission-links.js';
 import { resolvePreviewContext } from './util/submission-preview.js';
 import { deriveTournamentName } from './util/submission.js';
-import { parseKeyFromHash, savePublishingKey } from './util/submit-relay.js';
+import { parseKeyFromHash, savePublishingKey, getPublishingKey } from './util/submit-relay.js';
 
 const slugMeta = document.querySelector('meta[name="tournament-slug"]');
 const { slug, baseDir, manifestUrl, issue } = resolvePreviewContext({
@@ -57,16 +57,21 @@ if (statsSection && slug) {
   // .../preview.html?slug=<slug>#key=<key>; opening it stores the key
   // for this slug so every submission from this device publishes
   // instantly. The fragment is stripped immediately — it shouldn't
-  // survive into bookmarks or copy-pasted URLs.
+  // survive into bookmarks or copy-pasted URLs. The status line then
+  // shows on EVERY visit while the key is on file (this page doubles as
+  // the moderators' standings bookmark, and "Score a game" is the way
+  // back into the scorekeeper), just with capture-vs-recall wording.
   const handedKey = parseKeyFromHash(window.location.hash);
   if (handedKey) {
     savePublishingKey(slug, handedKey);
     history.replaceState(null, '', window.location.pathname + window.location.search);
+  }
+  if (handedKey || getPublishingKey(slug)) {
     const note = document.createElement('p');
     note.className = 'ts-intro sf-key-saved';
-    note.append(
-      '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically. '
-    );
+    note.append(handedKey
+      ? '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically. '
+      : '🔑 Publishing key on file — games you submit to this tournament publish automatically. ');
     // Carry the moderator straight into scoring: the scorekeeper lives at
     // the site root (preview.html sits one level down, per-tournament
     // pages two — the slug <meta> tells them apart). Relative, so mirrors
