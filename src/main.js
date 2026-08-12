@@ -198,12 +198,17 @@ function maybeNudgeSubmit() {
     dismissSubmitNudge();
     return;
   }
-  if (!submitNudgeArmed || getRosterMode() !== 'preset') return;
-  submitNudgeArmed = false;
-  if (document.getElementById('submit-nudge')) return;
+  if (!submitNudgeArmed) return;
   let lastSlug = '';
   try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
   const quickSlug = quickPublishSlug(lastSlug, loadPublishingKeys());
+  // Tournament Mode is one signal that this device is tournament staff; a
+  // publishing key on file (arrived via a TD's setup link) is the other —
+  // moderators who came in through the link never touch Tournament Mode.
+  // A casual pickup game has neither, and never sees the toast.
+  if (getRosterMode() !== 'preset' && !quickSlug) return;
+  submitNudgeArmed = false;
+  if (document.getElementById('submit-nudge')) return;
   const nudge = document.createElement('div');
   nudge.id = 'submit-nudge';
   nudge.innerHTML = quickSlug

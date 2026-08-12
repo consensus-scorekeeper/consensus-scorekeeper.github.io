@@ -64,8 +64,17 @@ if (statsSection && slug) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
     const note = document.createElement('p');
     note.className = 'ts-intro sf-key-saved';
-    note.textContent =
-      '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically.';
+    note.append(
+      '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically. '
+    );
+    // Carry the moderator straight into scoring: the scorekeeper lives at
+    // the site root (preview.html sits one level down, per-tournament
+    // pages two — the slug <meta> tells them apart). Relative, so mirrors
+    // and local dev keep working.
+    const score = document.createElement('a');
+    score.href = new URL(slugMeta && slugMeta.content ? '../../' : '../', window.location.href).href;
+    score.textContent = 'Score a game →';
+    note.appendChild(score);
     statsSection.insertBefore(note, submitLink);
   }
 }
