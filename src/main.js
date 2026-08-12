@@ -171,11 +171,35 @@ function submitResults() {
     csv: buildResultsCsv(state),
     onDone: ({ slug }) => {
       try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+      renderPublishBadge();
     },
   });
 }
 const submitResultsBtn = document.getElementById('submit-results-btn');
 if (submitResultsBtn) submitResultsBtn.hidden = !relayEnabled();
+
+// Persistent "this device publishes to <slug>" badge (bottom-left, above
+// the keybind hints — the one corner nothing else claims). Shown whenever
+// a stored publishing key pins down the tournament; links to its stats
+// page. Re-rendered after submissions, since those can change the target
+// (first submit records the slug, a new-tournament submit mints a key).
+function renderPublishBadge() {
+  document.getElementById('publish-badge')?.remove();
+  if (!relayEnabled()) return;
+  let lastSlug = '';
+  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
+  const slug = quickPublishSlug(lastSlug, loadPublishingKeys());
+  if (!slug) return;
+  const badge = document.createElement('a');
+  badge.id = 'publish-badge';
+  badge.href = `tournaments/${slug}/`;
+  badge.target = '_blank';
+  badge.rel = 'noopener';
+  badge.title = 'This device is set up to publish games to this tournament — click to open its stats page';
+  badge.innerHTML = `🔑 Publishing to <b>${escapeHtml(slug)}</b>`;
+  document.body.appendChild(badge);
+}
+renderPublishBadge();
 
 // One-time "publish the results?" nudge when the game looks finished
 // (isGameComplete in state.js — a heuristic, so this stays a dismissible
@@ -239,6 +263,7 @@ async function nudgePublishNow(btn) {
     return;
   }
   try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+  renderPublishBadge();
   if (!nudge) return;
   const previewUrl = result.data.previewUrl || '';
   const statsUrl = previewUrl ? new URL(`/tournaments/${slug}/`, previewUrl).toString() : '';
@@ -396,6 +421,7 @@ export {
   applyCustomAward,
   isGameComplete,
   maybeNudgeSubmit,
+  renderPublishBadge,
   reorderPlayer,
   // persistence
   saveState,

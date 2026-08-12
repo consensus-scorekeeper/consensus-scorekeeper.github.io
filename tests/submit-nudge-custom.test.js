@@ -6,7 +6,7 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 
-const { state, maybeNudgeSubmit } = await import('../src/main.js');
+const { state, maybeNudgeSubmit, renderPublishBadge } = await import('../src/main.js');
 
 function completeGame() {
   state.tutorialMode = false;
@@ -38,5 +38,30 @@ describe('submit nudge in custom roster mode', () => {
     expect(nudge()).toBeTruthy();
     expect(nudge().querySelector('[data-action="nudge-publish-now"]').dataset.slug)
       .toBe('linked-open-2026');
+  });
+});
+
+describe('persistent publish badge', () => {
+  const badge = () => document.getElementById('publish-badge');
+
+  it('absent without a key, appears with slug + stats link once keyed', () => {
+    localStorage.removeItem('consensus-tournament-keys-v1');
+    renderPublishBadge();
+    expect(badge()).toBeNull();
+
+    localStorage.setItem('consensus-tournament-keys-v1',
+      JSON.stringify({ 'linked-open-2026': 'cs_' + 'cd'.repeat(20) }));
+    renderPublishBadge();
+    expect(badge()).toBeTruthy();
+    expect(badge().textContent).toContain('linked-open-2026');
+    expect(badge().getAttribute('href')).toBe('tournaments/linked-open-2026/');
+  });
+
+  it('stays hidden when several keys make the target ambiguous', () => {
+    localStorage.setItem('consensus-tournament-keys-v1',
+      JSON.stringify({ 'a-open': 'cs_a', 'b-open': 'cs_b' }));
+    localStorage.removeItem('consensus-last-submit-slug-v1');
+    renderPublishBadge();
+    expect(badge()).toBeNull();
   });
 });

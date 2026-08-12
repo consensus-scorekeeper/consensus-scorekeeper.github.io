@@ -1455,3 +1455,24 @@ body {
   z-index: 60;
   font-size: 0.95rem;
 }
+
+/* Persistent "publishing to <slug>" badge (main.js renderPublishBadge):
+   bottom-left above the keybind hints — the corner nothing else claims
+   (nudge is bottom-center, controls bottom-right, sidebar right). */
+#publish-badge {
+  position: fixed;
+  bottom: 52px;
+  left: 10px;
+  z-index: 55;
+  background: rgba(30, 41, 59, 0.92);
+  color: #e2e8f0;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 0.78rem;
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+#publish-badge:hover { background: #1e293b; color: #fff; }
+#publish-badge b { font-weight: 600; }
