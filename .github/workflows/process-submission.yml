@@ -107,8 +107,12 @@ jobs:
       # only NOMINATES (verified=true when the relay bot authored the
       # issue with a matching stamp); the actual gate is here — the diff
       # wall: every file the PR changes must live in this slug's results
-      # folder. That structurally excludes new-tournament PRs (they touch
-      # roster-presets.js) and anything else code-shaped. The manifest is
+      # folder. A verified NEW-tournament submission (possible only with
+      # a maintainer-pre-minted key — Worker-minted fresh-slug keys stay
+      # pending until a human merge) widens the wall to exactly the
+      # creation file set: the registry entry (JSON-serialized, so
+      # injection-safe) and the slug's generated index.html. Anything
+      # else code-shaped still drops to manual review. The manifest is
       # regenerated INTO the branch because a GITHUB_TOKEN merge won't
       # trigger update-manifest.yml — with it, stats go live at the merge.
       # Same reason finalize-submission.yml won't fire: the 🎉/close
@@ -123,11 +127,16 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ISSUE: ${{ github.event.issue.number }}
           SLUG: ${{ steps.process.outputs.slug }}
+          NEW_TOURNAMENT: ${{ steps.process.outputs.new_tournament }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
         run: |
           BRANCH="submission/issue-$ISSUE"
           CHANGED=$(git diff --name-only origin/main...HEAD)
-          OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -v "^tournaments/$SLUG/results/" || true)
+          if [ "$NEW_TOURNAMENT" = "true" ]; then
+            OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -Ev "^tournaments/$SLUG/results/|^tournaments/$SLUG/index\.html$|^src/ui/roster-presets\.js$" || true)
+          else
+            OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -v "^tournaments/$SLUG/results/" || true)
+          fi
           if [ -n "$OUTSIDE" ]; then
             {
               echo 'auto_note<<AUTO_NOTE_EOF'

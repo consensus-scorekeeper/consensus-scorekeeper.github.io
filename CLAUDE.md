@@ -623,8 +623,13 @@ created, `pending` until its creation PR merges, hash-only in Worker KV).
 A key-verified submission gets a position-anchored "Relay verification"
 stamp and `process-submission.yml` auto-merges it — but only behind the
 **diff wall**: every changed file must be inside that slug's `results/`
-folder (checked against the real git diff), which structurally forces
-new-tournament PRs (they touch `roster-presets.js`) to a human merge.
+folder (checked against the real git diff). Verified NEW-tournament
+submissions widen the wall to exactly the creation file set
+(`roster-presets.js` + the slug's `index.html`) — possible only with a
+maintainer-pre-minted key (`scripts/mint_key.mjs`; Worker-minted
+fresh-slug keys stay pending until a human merge), and safe because the
+creation writes are injection-proof by construction. Self-serve
+creations without a pre-minted key still take the human merge.
 Author wall: the stamp only counts on issues authored by the relay's bot
 login (`RELAY_BOT_LOGIN`, default `consensus-submit-relay[bot]`). An
 `auto-hold` label on the issue forces manual review. Two GITHUB_TOKEN

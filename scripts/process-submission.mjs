@@ -212,9 +212,14 @@ if (warnings.length > 0) {
 //     that, so its body — including the stamp — is Worker-rendered),
 //   - the position-anchored "Relay verification" stamp names this exact
 //     slug (the Worker only stamps after checking the publishing key),
-//   - it's not a new-tournament submission (those touch code and always
-//     get a human merge; the workflow's diff wall enforces this again),
 //   - no maintainer put the auto-hold label on the issue.
+// New-tournament submissions qualify too: a verified stamp on a fresh
+// slug means the maintainer PRE-MINTED that slug's key (the Worker's
+// self-minted fresh-slug keys are pending until a human merge), so the
+// approval already happened at mint time. The creation writes are
+// injection-safe by construction (JSON-serialized registry entry,
+// escaped page retarget, validated slug), and the workflow's diff wall
+// widens to exactly the creation file set for this case.
 // The workflow independently re-checks the PR's changed paths before
 // merging — verification here only *nominates* the PR for auto-merge.
 const relayBot = process.env.RELAY_BOT_LOGIN || 'consensus-submit-relay[bot]';
@@ -222,7 +227,6 @@ const authorIsRelay = issue.user && issue.user.login === relayBot;
 const held = (issue.labels || []).some((l) => l.name === 'auto-hold');
 const verified =
   errors.length === 0 &&
-  !isNewTournament &&
   !held &&
   authorIsRelay &&
   parseVerifiedSlug(issue.body) === tournament.slug;
@@ -232,6 +236,7 @@ fs.appendFileSync(
   process.env.GITHUB_OUTPUT,
   `status=${errors.length === 0 ? 'ok' : 'invalid'}\n` +
   `slug=${tournament ? tournament.slug : ''}\n` +
-  `verified=${verified}\n`
+  `verified=${verified}\n` +
+  `new_tournament=${isNewTournament}\n`
 );
 console.log(lines.join('\n'));

@@ -60,10 +60,11 @@ scorekeeper / stats page
   mints one and hands it to the TD: `node scripts/mint_key.mjs <slug>`
   (wraps `/admin/rotate`; secret from `RELAY_ADMIN_SECRET` or the
   git-ignored `workers/submit-relay/.admin-secret`). Minting also works
-  for a slug that doesn't exist yet — that **reserves** it: the TD gets
-  an active key up front, their creation submission arrives verified but
-  still takes the human merge (new slugs always do), and the relay won't
-  mint a competing key to whoever else submits under that slug first.
+  for a slug that doesn't exist yet — that **reserves and pre-approves**
+  it: the TD gets an active key up front, their first submission
+  auto-creates the tournament with no merge (minting the key WAS the
+  approval — see the diff wall below), and the relay won't mint a
+  competing key to whoever else submits under that slug first.
   Re-minting an existing slug's key kills the old one instantly
   (lost/leaked-key recovery).
 - Keys live client-side in localStorage per slug, so each moderator device
@@ -89,10 +90,18 @@ simply drops to manual review.
    submission's slug.
 3. **Diff wall** — every file the PR actually changes lives under
    `tournaments/<slug>/results/` for that same slug. This is checked
-   against the real git diff, not the form. It structurally excludes the
-   dangerous case: new-tournament submissions touch
-   `src/ui/roster-presets.js` (code every visitor executes) and so always
-   keep a human merge — trusted key or not.
+   against the real git diff, not the form. One widening: a **verified
+   new-tournament** submission may additionally touch exactly
+   `src/ui/roster-presets.js` and `tournaments/<slug>/index.html` — the
+   creation file set. That's safe on two grounds: a verified stamp on a
+   fresh slug is only possible with a **maintainer-pre-minted** key
+   (Worker-minted fresh-slug keys stay `pending` until a human merge),
+   so the approval already happened at mint time; and the creation
+   writes are injection-proof by construction — the registry entry is
+   `JSON.stringify`-serialized (untrusted names can't escape a string
+   literal in that visitor-executed file), the page retarget escapes
+   the display name, and the slug passes strict kebab-case validation.
+   Self-serve creations (no pre-minted key) still take the human merge.
 
 Either wall alone stops cross-tournament writes; together they also stop a
 Worker bug from turning into a code-publish path. Within one tournament,

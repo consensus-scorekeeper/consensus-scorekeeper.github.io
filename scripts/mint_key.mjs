@@ -4,10 +4,10 @@
 //
 //   node scripts/mint_key.mjs <slug>
 //
-// Prints the new ACTIVE key once; hand it to the TD. Their first
-// submission still goes through your one creation-PR merge (new slugs
-// always do), and everything after publishes automatically. Minting
-// ahead of time also reserves the slug: the relay won't hand a
+// Prints the new ACTIVE key once; hand it to the TD. Minting IS the
+// approval: for a fresh slug their first submission auto-creates the
+// tournament, and every submission publishes automatically — no merges.
+// Minting ahead of time also reserves the slug: the relay won't hand a
 // competing key to whoever submits under it first.
 //
 // ⚠️ If the slug already has a key, this REPLACES it — the old key
@@ -64,5 +64,5 @@ console.log();
 console.log(`  ${data.key}`);
 console.log();
 console.log('Hand it to the TD. With it, submissions on the stats site publish');
-console.log('automatically — except the first one for a new slug, which creates the');
-console.log('tournament and waits for your PR merge as usual.');
+console.log('automatically — including the first one for a new slug, which creates');
+console.log('the tournament stats page on the spot (minting this key was the approval).');
