@@ -1,0 +1,11 @@
+﻿Packet,Smoke Pack 1.pdf
+Team A,Smoke Reds
+Team B,Smoke Blues
+
+Team,Score
+Smoke Reds,100
+Smoke Blues,80
+
+Player,Team,Points
+Smoke Alice,Smoke Reds,60
+Smoke Bob,Smoke Blues,80
