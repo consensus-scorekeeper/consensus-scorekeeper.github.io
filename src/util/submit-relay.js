@@ -98,6 +98,15 @@ export async function removeGame({ slug, filename }) {
   return post('/remove-game', { slug, filename, key: getPublishingKey(slug) });
 }
 
+// Which tournament a one-click "Publish now" should target: the device's
+// last-submitted slug when its key is on file, else the only keyed
+// tournament, else '' (ambiguous — the full form is needed).
+export function quickPublishSlug(lastSlug, keys) {
+  if (lastSlug && keys[lastSlug]) return lastSlug;
+  const slugs = Object.keys(keys);
+  return slugs.length === 1 ? slugs[0] : '';
+}
+
 // ---------- key-handout links ----------
 // A TD shares ONE link with their moderators; opening it saves the key
 // for that slug on the device (stats-main.js) — nobody types slugs or

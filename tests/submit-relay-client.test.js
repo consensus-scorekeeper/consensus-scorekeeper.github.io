@@ -10,6 +10,7 @@ import {
   savePublishingKey,
   keyHandoutUrl,
   parseKeyFromHash,
+  quickPublishSlug,
   SITE_BASE,
 } from '../src/util/submit-relay.js';
 
@@ -55,5 +56,24 @@ describe('key-handout links', () => {
 
   it('relay is enabled in the shipped config', () => {
     expect(relayEnabled()).toBe(true);
+  });
+});
+
+describe('quickPublishSlug (one-click Publish now target)', () => {
+  const KEYS = { 'a-open': 'cs_a', 'b-open': 'cs_b' };
+
+  it('prefers the last-submitted slug when its key is on file', () => {
+    expect(quickPublishSlug('b-open', KEYS)).toBe('b-open');
+  });
+
+  it('falls back to the only keyed tournament', () => {
+    expect(quickPublishSlug('', { 'a-open': 'cs_a' })).toBe('a-open');
+    expect(quickPublishSlug('stale-slug', { 'a-open': 'cs_a' })).toBe('a-open');
+  });
+
+  it('returns nothing when ambiguous or keyless — the full form takes over', () => {
+    expect(quickPublishSlug('', KEYS)).toBe('');
+    expect(quickPublishSlug('', {})).toBe('');
+    expect(quickPublishSlug('no-key-slug', {})).toBe('');
   });
 });

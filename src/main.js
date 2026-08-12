@@ -55,7 +55,12 @@ import { escapeHtml, csvEscape } from './util/escape.js';
 import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
 import { downloadTextFile } from './ui/download.js';
 import { openSubmissionForm } from './ui/submission-form.js';
-import { relayEnabled } from './util/submit-relay.js';
+import {
+  relayEnabled,
+  loadPublishingKeys,
+  quickPublishSlug,
+  submitResults as sendResultsToRelay,
+} from './util/submit-relay.js';
 import { setupSplitters } from './ui/splitter.js';
 import {
   viewPack,
@@ -177,6 +182,14 @@ if (submitResultsBtn) submitResultsBtn.hidden = !relayEnabled();
 // toast, never a blocker). Tournament Mode only: a pickup game with
 // hand-typed rosters has nowhere to publish to. Re-arms when a new game
 // starts (completeness drops back to false).
+//
+// With a publishing key on file for an unambiguous tournament
+// (quickPublishSlug), the nudge is ONE-CLICK: Publish now submits the
+// game straight from the toast — no form, nothing to type; Review…
+// opens the full modal. Any failure falls back to the modal, prefilled,
+// so the moderator can see and fix rather than losing the game.
+const dismissBtn =
+  '<button class="btn" data-action="dismiss-submit-nudge" title="Dismiss" aria-label="Dismiss">&times;</button>';
 let submitNudgeArmed = true;
 function maybeNudgeSubmit() {
   if (!relayEnabled() || state.tutorialMode) return;
@@ -188,17 +201,49 @@ function maybeNudgeSubmit() {
   if (!submitNudgeArmed || getRosterMode() !== 'preset') return;
   submitNudgeArmed = false;
   if (document.getElementById('submit-nudge')) return;
+  let lastSlug = '';
+  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
+  const quickSlug = quickPublishSlug(lastSlug, loadPublishingKeys());
   const nudge = document.createElement('div');
   nudge.id = 'submit-nudge';
-  nudge.innerHTML =
-    '<span>🏁 Game complete — publish the results to the tournament stats page?</span>' +
-    '<button class="btn btn-start" data-action="submit-results">Submit Results</button>' +
-    '<button class="btn" data-action="dismiss-submit-nudge" title="Dismiss" aria-label="Dismiss">&times;</button>';
+  nudge.innerHTML = quickSlug
+    ? `<span>🏁 Game complete — publish the results to <strong>${escapeHtml(quickSlug)}</strong>?</span>` +
+      `<button class="btn btn-start" data-action="nudge-publish-now" data-slug="${escapeHtml(quickSlug)}">Publish now</button>` +
+      '<button class="btn" data-action="submit-results">Review…</button>' + dismissBtn
+    : '<span>🏁 Game complete — publish the results to the tournament stats page?</span>' +
+      '<button class="btn btn-start" data-action="submit-results">Submit Results</button>' + dismissBtn;
   document.body.appendChild(nudge);
 }
 function dismissSubmitNudge() {
   const el = document.getElementById('submit-nudge');
   if (el) el.remove();
+}
+
+// Publish now: submit the finished game directly from the toast (the
+// same relay call the modal makes, so validation/keys behave identically).
+async function nudgePublishNow(btn) {
+  const slug = btn.dataset.slug;
+  const nudge = document.getElementById('submit-nudge');
+  const csv = buildResultsCsv(state);
+  btn.disabled = true;
+  btn.textContent = 'Publishing…';
+  const result = await sendResultsToRelay({ slug, csv });
+  if (!result.ok) {
+    dismissSubmitNudge();
+    openSubmissionForm({ slug, csv });
+    return;
+  }
+  try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+  if (!nudge) return;
+  const previewUrl = result.data.previewUrl || '';
+  const statsUrl = previewUrl ? new URL(`/tournaments/${slug}/`, previewUrl).toString() : '';
+  nudge.innerHTML = result.data.verified
+    ? '<span>🎉 Published! The stats page updates in a couple of minutes.</span>' +
+      (statsUrl ? `<a class="btn" href="${escapeHtml(statsUrl)}" target="_blank" rel="noopener">View stats</a>` : '') +
+      dismissBtn
+    : '<span>✅ Submitted for review — a maintainer publishes it shortly.</span>' +
+      (previewUrl ? `<a class="btn" href="${escapeHtml(previewUrl)}" target="_blank" rel="noopener">Preview</a>` : '') +
+      dismissBtn;
 }
 subscribe(maybeNudgeSubmit);
 
@@ -296,6 +341,7 @@ const ACTION_HANDLERS = {
   'toggle-inline-pdf': () => toggleInlinePdf(),
   'export-csv': () => exportCsv(),
   'submit-results': () => submitResults(),
+  'nudge-publish-now': (btn) => nudgePublishNow(btn),
   'dismiss-submit-nudge': () => dismissSubmitNudge(),
   'reparse-current-pdf': () => reparseCurrentPdf(),
   'back-to-setup': () => { backToSetup(); updateSessionButtons(); },
@@ -344,6 +390,7 @@ export {
   resetStreak,
   applyCustomAward,
   isGameComplete,
+  maybeNudgeSubmit,
   reorderPlayer,
   // persistence
   saveState,
