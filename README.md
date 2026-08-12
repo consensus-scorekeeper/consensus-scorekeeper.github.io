@@ -22,7 +22,7 @@ Progress is saved in the browser, and a refresh always lands back on the setup s
 
 ![Tournament hub page with a search box at the top and one tournament card for Stanford Consensus 2026 below it.](docs/screenshots/stats-hub.png)
 
-`tournaments/<slug>/` is one tournament's stats page. It reads the CSV exports from `results/manifest.json` in the same folder and shows standings, an individual leaderboard, per-team and per-player drill-downs, and a per-game breakdown. Each stats page also has a "Submit game results" link — a GitHub form where anyone can paste or attach exported CSVs to publish games to that page (see "Running a tournament" below).
+`tournaments/<slug>/` is one tournament's stats page. It reads the CSV exports from `results/manifest.json` in the same folder and shows standings, an individual leaderboard, per-team and per-player drill-downs, and a per-game breakdown. Each stats page also has a "Submit game results" link — an in-page form (no GitHub account needed) where anyone can paste or attach exported CSVs to publish games to that page (see "Running a tournament" below).
 
 ![Stanford Consensus 2026 stats page. A summary card on top, the team standings table below it, and the individual leaderboard below that.](docs/screenshots/stats-standings.png)
 
@@ -42,9 +42,11 @@ That starts a dev server on port 8000. The scorekeeper is at /, the hub at /tour
 
 The intended workflow during a multi-room tournament:
 
-1. Each room scores its game in `index.html` and clicks Export CSV at the end.
-2. Someone opens the tournament's stats page and clicks **Submit game results**. That's a GitHub issue form with the tournament slug prefilled — paste the CSV(s) into the text box or drag the files into the attachments box. A bot validates the submission within a minute or two and opens a pull request; a maintainer merging it publishes the games. Re-submitting a game (same packet, same two teams) replaces the earlier version instead of duplicating it.
-3. After the merge, an Action regenerates that folder's `manifest.json`. The next visit to the tournament's stats page picks up the new games.
+1. Each room scores its game in `index.html` and, at the end, clicks **Submit Results** (one click, no download) — or **Export CSV** and submits the file later from the tournament's stats page via **Submit game results**. Either way it's an in-page form; no GitHub account needed. The form validates the CSVs instantly and, on submit, files the submission automatically. Re-submitting a game (same packet, same two teams) replaces the earlier version instead of duplicating it.
+2. With the tournament's **publishing key** entered (the TD gets it when the tournament is created and shares it with their moderators; it's remembered per device), the games **publish automatically within a minute or two** — no human review. Key holders can also remove a published game from the stats page's per-game view. Without the key, a bot still validates the submission and a maintainer publishes it by merging the pull request it opens; the submitter gets a live preview link either way.
+3. After publishing, the stats page picks up the new games on its next load (the `manifest.json` regenerates automatically).
+
+Under the hood this runs through a small Cloudflare Worker (`workers/submit-relay/`) that files GitHub issues on the submitter's behalf; the full design and trust model is in `docs/submission-relay.md`. If the relay is unreachable, the form falls back to the GitHub issue form, which keeps working as before. Maintainer tools: `node scripts/mint_key.mjs <slug>` mints (or rotates) a tournament's publishing key — including for a slug that doesn't exist yet, which reserves it for a TD — and the **Remove tournament** workflow in the Actions tab deletes a tournament outright.
 
 Maintainers can also skip the form and drop CSVs straight into `tournaments/<slug>/results/` — the manifest Action runs on any push that touches those folders. If you're testing locally without pushing, `scripts/update_manifests.py` does the same thing by hand.
 

@@ -57,7 +57,15 @@ scorekeeper / stats page
   tournament-creation PR merges (`finalize-submission.yml` calls the
   Worker's admin activate endpoint).
 - Tournaments that predate this system have no key until the maintainer
-  mints one (`/admin/rotate`) and hands it to the TD.
+  mints one and hands it to the TD: `node scripts/mint_key.mjs <slug>`
+  (wraps `/admin/rotate`; secret from `RELAY_ADMIN_SECRET` or the
+  git-ignored `workers/submit-relay/.admin-secret`). Minting also works
+  for a slug that doesn't exist yet — that **reserves** it: the TD gets
+  an active key up front, their creation submission arrives verified but
+  still takes the human merge (new slugs always do), and the relay won't
+  mint a competing key to whoever else submits under that slug first.
+  Re-minting an existing slug's key kills the old one instantly
+  (lost/leaked-key recovery).
 - Keys live client-side in localStorage per slug, so each moderator device
   enters it once.
 
@@ -189,14 +197,27 @@ revert one commit, rotate the key.
   the Actions tab.
 - Lost/leaked key → maintainer `/admin/rotate`.
 
-## Rollout
+## Deployment status (2026-08-11: LIVE)
 
-1. Worker + credential deployed; smoke-test by curl-ing a submission and
-   watching the existing pipeline process it (manual merge still).
-2. Workflows: auto-merge path, removal flows, activation.
-3. In-app form on stats pages/hub; then the scorekeeper button and
-   remove-game UI.
-4. Turnstile once traffic warrants it.
+Everything above is deployed and was verified end to end in production
+with a scratch tournament (issues #14/#16/#18, PRs #15/#17): creation →
+maintainer merge → key activation → **verified submission auto-published
+by the workflow itself** → key-authorized game removal → Remove-tournament
+workflow wiping folder + registry + KV hash.
 
-Each step degrades cleanly: with `SUBMIT_RELAY_BASE` empty or the Worker
-down, the site behaves exactly as before this feature.
+- Worker: `https://consensus-submit-relay.denisliu10.workers.dev`
+  (`SUBMIT_RELAY_BASE` in `src/util/submit-relay.js`; also the repo
+  Actions variable `RELAY_URL`, with `RELAY_ADMIN_SECRET` as the
+  matching secret).
+- Credential: GitHub App `consensus-submit-relay` (App ID 4565633,
+  installation 153080588) — Issues R/W on this repo only. Its bot login
+  is what `RELAY_BOT_LOGIN` defaults to in the workflows.
+- Not yet enabled: Turnstile (both sides ship the hooks; turn it on per
+  workers/submit-relay/README.md if spam ever appears).
+
+Kill switches / levers, mildest first: `auto-hold` label on an issue
+(forces manual review), `scripts/mint_key.mjs` re-mint (revokes a key),
+`/admin/delete-key` (removes a slug's key entirely), Remove-tournament
+workflow (Actions tab), and setting `SUBMIT_RELAY_BASE = ''` (turns the
+whole in-app feature off — the site falls back to the GitHub form and
+behaves exactly as before this feature existed).
