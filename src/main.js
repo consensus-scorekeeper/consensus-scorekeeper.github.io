@@ -16,6 +16,8 @@
 import {
   state,
   hasGameInProgress,
+  isGameComplete,
+  subscribe,
   addPoints,
   clearPlayerPoints,
   clearCurrentQuestion,
@@ -28,7 +30,7 @@ import { rebuildJailbreakLocks } from './game/jailbreak.js';
 import { rebuildStreakGroups } from './game/streaks.js';
 import { getInitials, getAnsweredBy, getSplitPair, getCategoryRunSize } from './game/categories.js';
 import { STORAGE_KEY, saveState, savePdfBytes, loadPdfBytes, clearSavedState } from './game/persistence.js';
-import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameField, toggleRosterMode } from './ui/setup.js';
+import { addPlayer, removePlayer, renderRoster, setupSetupScreen, setTeamNameField, toggleRosterMode, getRosterMode } from './ui/setup.js';
 import { parsePdf, parseDocx, parseTextFile, processZipBuffer, handleZipUpload } from './loader.js';
 import { readZip, looksLikePdfOrZip } from './parser/zip.js';
 import { cleanTrailing, extractRichRange, richToHtml, parseQuestions } from './parser/questions.js';
@@ -156,6 +158,7 @@ function exportCsv() {
 // The button is revealed at startup only when the relay is configured.
 const LAST_SUBMIT_SLUG_KEY = 'consensus-last-submit-slug-v1';
 function submitResults() {
+  dismissSubmitNudge();
   let lastSlug = '';
   try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
   openSubmissionForm({
@@ -168,6 +171,36 @@ function submitResults() {
 }
 const submitResultsBtn = document.getElementById('submit-results-btn');
 if (submitResultsBtn) submitResultsBtn.hidden = !relayEnabled();
+
+// One-time "publish the results?" nudge when the game looks finished
+// (isGameComplete in state.js — a heuristic, so this stays a dismissible
+// toast, never a blocker). Tournament Mode only: a pickup game with
+// hand-typed rosters has nowhere to publish to. Re-arms when a new game
+// starts (completeness drops back to false).
+let submitNudgeArmed = true;
+function maybeNudgeSubmit() {
+  if (!relayEnabled() || state.tutorialMode) return;
+  if (!isGameComplete()) {
+    submitNudgeArmed = true;
+    dismissSubmitNudge();
+    return;
+  }
+  if (!submitNudgeArmed || getRosterMode() !== 'preset') return;
+  submitNudgeArmed = false;
+  if (document.getElementById('submit-nudge')) return;
+  const nudge = document.createElement('div');
+  nudge.id = 'submit-nudge';
+  nudge.innerHTML =
+    '<span>🏁 Game complete — publish the results to the tournament stats page?</span>' +
+    '<button class="btn btn-start" data-action="submit-results">Submit Results</button>' +
+    '<button class="btn" data-action="dismiss-submit-nudge" title="Dismiss" aria-label="Dismiss">&times;</button>';
+  document.body.appendChild(nudge);
+}
+function dismissSubmitNudge() {
+  const el = document.getElementById('submit-nudge');
+  if (el) el.remove();
+}
+subscribe(maybeNudgeSubmit);
 
 // loadState restores the last session's data from localStorage but always
 // lands on the setup screen — re-entering the game is an explicit Resume
@@ -263,6 +296,7 @@ const ACTION_HANDLERS = {
   'toggle-inline-pdf': () => toggleInlinePdf(),
   'export-csv': () => exportCsv(),
   'submit-results': () => submitResults(),
+  'dismiss-submit-nudge': () => dismissSubmitNudge(),
   'reparse-current-pdf': () => reparseCurrentPdf(),
   'back-to-setup': () => { backToSetup(); updateSessionButtons(); },
   ...rosterManagerActions,
@@ -309,6 +343,7 @@ export {
   clearCurrentQuestion,
   resetStreak,
   applyCustomAward,
+  isGameComplete,
   reorderPlayer,
   // persistence
   saveState,

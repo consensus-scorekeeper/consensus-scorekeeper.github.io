@@ -81,6 +81,18 @@ export function hasGameInProgress() {
     || state.teamB.score !== 0;
 }
 
+// True when the game looks finished: every slot resolved, or the
+// moderator is sitting on the final slot and has scored it. Drives the
+// one-time "Submit Results?" nudge (main.js) — a heuristic for a
+// dismissible prompt, deliberately not a hard game-over state (packs
+// end early, tiebreakers happen), so nothing else may gate on it.
+export function isGameComplete() {
+  const total = state.questions.length;
+  if (!state.hasQuestions || total === 0) return false;
+  return state.answeredQuestions.size >= total
+    || (state.currentQuestion >= total - 1 && state.answeredQuestions.has(total - 1));
+}
+
 // ==================== REDUCERS ====================
 
 export function addPoints(team, playerIndex, points) {

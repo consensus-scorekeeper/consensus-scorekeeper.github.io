@@ -86,7 +86,7 @@ const STEPS = [
   {
     title: 'Wrapping up',
     target: '.game-controls',
-    body: `When the game ends, click <strong>Export CSV</strong> for a final-results file (metadata, team scores, per-player rows). <strong>Back to Setup</strong> returns you to the rosters/pack screen — your game is preserved, so you can come back to it.`,
+    body: `When the game ends, click <strong>Submit Results</strong> to publish it straight to the tournament's public stats page (no download needed) — or <strong>Export CSV</strong> for a final-results file. <strong>Back to Setup</strong> returns you to the rosters/pack screen — your game is preserved, so you can come back to it.`,
   },
   {
     title: `You're ready`,

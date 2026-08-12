@@ -177,7 +177,11 @@ src/
                           ('' disables the whole in-app submission feature, like
                           PACK_PROXY_BASE), TURNSTILE_SITE_KEY, per-slug
                           publishing-key localStorage
-                          (consensus-tournament-keys-v1), submit/remove calls
+                          (consensus-tournament-keys-v1), submit/remove calls,
+                          key-handout links (keyHandoutUrl builds
+                          preview.html?slug=…#key=…; parseKeyFromHash consumes
+                          the fragment — stats-main.js saves it + strips the
+                          hash, so TDs share ONE link and nobody types keys)
     submission-preview.js ← pure logic behind the pending-submission preview:
                           resolvePreviewContext (meta/query slug + ?preview=),
                           GitHub API URL builders, classifyPull, previewCsvFiles,
@@ -643,6 +647,14 @@ wrong-identity mistakes that content-identity replacement can't) and the
 maintainer-only Remove-tournament workflow (Actions tab), which must also
 delete the slug's KV key hash — a stale hash would let an old key publish
 into a future tournament reusing the slug.
+
+Scorekeeper UX around this: a Submit Results button next to Export CSV
+(current game's CSV prefilled; slug remembered per device, plus datalist
+suggestions from stored keys), and a one-time end-of-game nudge toast
+(`isGameComplete()` in state.js — a heuristic, never a hard game-over
+state) shown only in Tournament Mode with the relay enabled. The modal
+shows a "✓ key on file" status line so the trust state is visible before
+submitting.
 
 ### Pending-submission preview
 

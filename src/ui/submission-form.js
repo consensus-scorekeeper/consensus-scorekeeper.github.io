@@ -18,6 +18,8 @@ import { submitResultsUrl } from '../util/submit-results.js';
 import {
   TURNSTILE_SITE_KEY,
   getPublishingKey,
+  loadPublishingKeys,
+  keyHandoutUrl,
   submitResults,
 } from '../util/submit-relay.js';
 import { escapeHtml } from '../util/escape.js';
@@ -103,7 +105,8 @@ function buildModal() {
         </p>
         <label class="format-modal-label" for="sf-slug">Tournament slug</label>
         <input type="text" id="sf-slug" class="submission-input" autocomplete="off"
-               placeholder="e.g. stanford-consensus-2026">
+               list="sf-slug-known" placeholder="e.g. stanford-consensus-2026">
+        <datalist id="sf-slug-known"></datalist>
         <div id="sf-new-tournament-fields" hidden>
           <label class="format-modal-label" for="sf-name">Tournament name <span class="submission-optional">(new tournaments only)</span></label>
           <input type="text" id="sf-name" class="submission-input" autocomplete="off" placeholder="Bay Area Open 2026">
@@ -117,8 +120,9 @@ function buildModal() {
           <label class="btn submission-file-btn">Add .csv file(s)…<input type="file" id="sf-files" accept=".csv,text/csv" multiple hidden></label>
           <span id="sf-validation" class="submission-validation"></span>
         </div>
-        <label class="format-modal-label" for="sf-key">Publishing key <span class="submission-optional">(optional — publishes instantly; get it from your tournament director)</span></label>
+        <label class="format-modal-label" for="sf-key">Publishing key <span class="submission-optional">(optional — with a key, games publish instantly with no review; your tournament's organizer shares it as a link or a cs_… code)</span></label>
         <input type="password" id="sf-key" class="submission-input" autocomplete="off" placeholder="cs_…">
+        <div id="sf-key-status" class="submission-validation"></div>
         <div id="sf-turnstile"></div>
         <div class="format-modal-actions">
           <button type="button" class="btn btn-start" data-sf="submit" id="sf-submit">Submit</button>
@@ -145,7 +149,26 @@ function buildModal() {
     const slug = currentSlug();
     modal.querySelector('#sf-key').value = getPublishingKey(slug);
     modal.querySelector('#sf-github-link').href = submitResultsUrl(slug);
+    refreshKeyStatus();
   });
+  modal.querySelector('#sf-key').addEventListener('input', refreshKeyStatus);
+}
+
+// Make the trust state legible before submitting: a stored key that the
+// field still matches means this device is set up for instant publishing.
+function refreshKeyStatus() {
+  const el = modal.querySelector('#sf-key-status');
+  const typed = modal.querySelector('#sf-key').value.trim();
+  const stored = getPublishingKey(currentSlug());
+  if (typed && typed === stored) {
+    el.textContent = '✓ Key on file for this tournament — this submission publishes instantly.';
+    el.className = 'submission-validation success';
+  } else if (typed) {
+    el.textContent = 'Key will be checked when you submit.';
+    el.className = 'submission-validation';
+  } else {
+    el.textContent = '';
+  }
 }
 
 function currentSlug() {
@@ -240,17 +263,20 @@ function showSuccess(slug, data) {
     );
   }
   if (data.newTournamentKey) {
+    const handout = keyHandoutUrl(slug, data.newTournamentKey);
     parts.push(
       `<div class="submission-key-box">
          <p><strong>Your publishing key for <code>${escapeHtml(slug)}</code></strong> — shown only
-         once, so save it now (it's also remembered on this device). Share it with your room
-         moderators: once the tournament is approved, submissions with this key publish
-         instantly, with no review step.</p>
+         once, so save it now (it's also remembered on this device). Once the tournament is
+         approved, submissions with this key publish instantly, with no review step.</p>
          <div class="submission-key-row">
            <input type="text" readonly class="submission-input" id="sf-issued-key"
                   value="${escapeHtml(data.newTournamentKey)}">
            <button type="button" class="btn" data-sf="copy-key">Copy</button>
          </div>
+         <p>Easiest way to share it: send your room moderators
+         <a href="${escapeHtml(handout)}" target="_blank" rel="noopener">this setup link</a> —
+         opening it saves the key on their device, nothing to type.</p>
        </div>`
     );
   }
@@ -299,14 +325,23 @@ export function openSubmissionForm(opts = {}) {
   modal.querySelector('#sf-help').hidden = Boolean(opts.newTournament);
   modal.querySelector('#sf-new-tournament-fields').hidden = !opts.newTournament;
 
+  // Devices with stored publishing keys already know their tournaments:
+  // offer those slugs as suggestions, and when the slug is free-form
+  // (scorekeeper flow) with exactly one known tournament, prefill it.
+  const knownSlugs = Object.keys(loadPublishingKeys());
+  modal.querySelector('#sf-slug-known').innerHTML =
+    knownSlugs.map((s) => `<option value="${escapeHtml(s)}"></option>`).join('');
+
   const slugEl = modal.querySelector('#sf-slug');
-  slugEl.value = opts.slug || '';
+  slugEl.value = opts.slug || (!opts.lockSlug && !opts.newTournament && knownSlugs.length === 1
+    ? knownSlugs[0] : '');
   slugEl.readOnly = Boolean(opts.lockSlug);
   modal.querySelector('#sf-csv').value = opts.csv || '';
   modal.querySelector('#sf-key').value = getPublishingKey(slugEl.value.trim());
   modal.querySelector('#sf-github-link').href = submitResultsUrl(opts.lockSlug ? opts.slug : '');
   setStatus(modal.querySelector('#sf-status'), '');
   showValidation();
+  refreshKeyStatus();
   mountTurnstile();
 
   modal.classList.add('open');

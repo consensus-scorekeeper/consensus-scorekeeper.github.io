@@ -13,6 +13,11 @@
 
 export const SUBMIT_RELAY_BASE = 'https://consensus-submit-relay.denisliu10.workers.dev';
 
+// Canonical site origin — only for building shareable key-handout links
+// (like SUBMISSIONS_REPO in submit-results.js, never for page-internal
+// URLs, which must stay relative).
+export const SITE_BASE = 'https://consensus-scorekeeper.github.io';
+
 // Cloudflare Turnstile site key — empty disables the widget. The Worker
 // only enforces Turnstile when ITS secret is set, so these can be turned
 // on independently (see workers/submit-relay/README.md).
@@ -91,4 +96,22 @@ export async function submitResults({ slug, csv, name, description, notes, key, 
 
 export async function removeGame({ slug, filename }) {
   return post('/remove-game', { slug, filename, key: getPublishingKey(slug) });
+}
+
+// ---------- key-handout links ----------
+// A TD shares ONE link with their moderators; opening it saves the key
+// for that slug on the device (stats-main.js) — nobody types slugs or
+// keys. The key rides in the URL FRAGMENT so it never reaches a server
+// or its logs; preview.html is the target because it exists even before
+// the tournament's own page does (and shows the current stats either way).
+
+export function keyHandoutUrl(slug, key) {
+  return `${SITE_BASE}/tournaments/preview.html?slug=${slug}#key=${key}`;
+}
+
+// '#key=cs_<40 hex>' → the key, else ''. Strict shape check so junk
+// fragments can't get persisted as keys.
+export function parseKeyFromHash(hash) {
+  const m = /^#key=(cs_[0-9a-f]{40})$/.exec(String(hash || ''));
+  return m ? m[1] : '';
 }

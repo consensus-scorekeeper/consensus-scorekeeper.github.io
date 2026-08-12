@@ -22,7 +22,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { isValidTournamentSlug } from '../src/util/submission.js';
-import { SUBMIT_RELAY_BASE } from '../src/util/submit-relay.js';
+import { SUBMIT_RELAY_BASE, keyHandoutUrl } from '../src/util/submit-relay.js';
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const slug = (process.argv[2] || '').trim();
@@ -63,6 +63,11 @@ console.log(`Publishing key for ${slug} (active immediately; any previous key is
 console.log();
 console.log(`  ${data.key}`);
 console.log();
-console.log('Hand it to the TD. With it, submissions on the stats site publish');
+console.log('Easiest handoff — send the TD this setup link (opening it saves the key');
+console.log('on their device; they share the same link with their room moderators):');
+console.log();
+console.log(`  ${keyHandoutUrl(slug, data.key)}`);
+console.log();
+console.log('With the key on a device, submissions on the stats site publish');
 console.log('automatically — including the first one for a new slug, which creates');
 console.log('the tournament stats page on the spot (minting this key was the approval).');

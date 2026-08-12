@@ -21,6 +21,7 @@ import { getTournamentBySlug } from './ui/roster-presets.js';
 import { submitResultsLink } from './ui/submission-links.js';
 import { resolvePreviewContext } from './util/submission-preview.js';
 import { deriveTournamentName } from './util/submission.js';
+import { parseKeyFromHash, savePublishingKey } from './util/submit-relay.js';
 
 const slugMeta = document.querySelector('meta[name="tournament-slug"]');
 const { slug, baseDir, manifestUrl, issue } = resolvePreviewContext({
@@ -51,6 +52,22 @@ if (statsSection && slug) {
   const submitLink = submitResultsLink(slug);
   statsSection.insertBefore(submitLink, document.getElementById('ts-status'));
   addRulesBriefingLink(statsSection, submitLink);
+
+  // Key-handout links (util/submit-relay.js keyHandoutUrl): a TD shares
+  // .../preview.html?slug=<slug>#key=<key>; opening it stores the key
+  // for this slug so every submission from this device publishes
+  // instantly. The fragment is stripped immediately — it shouldn't
+  // survive into bookmarks or copy-pasted URLs.
+  const handedKey = parseKeyFromHash(window.location.hash);
+  if (handedKey) {
+    savePublishingKey(slug, handedKey);
+    history.replaceState(null, '', window.location.pathname + window.location.search);
+    const note = document.createElement('p');
+    note.className = 'ts-intro sf-key-saved';
+    note.textContent =
+      '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically.';
+    statsSection.insertBefore(note, submitLink);
+  }
 }
 
 // A tournament may ship an optional rules briefing (rules-slides.html next
