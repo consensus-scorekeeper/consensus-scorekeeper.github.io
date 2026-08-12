@@ -11,7 +11,7 @@
 // TD to their moderators) are remembered per-slug in localStorage, so a
 // device enters its key once. Only ever sent to SUBMIT_RELAY_BASE.
 
-export const SUBMIT_RELAY_BASE = '';
+export const SUBMIT_RELAY_BASE = 'https://consensus-submit-relay.denisliu10.workers.dev';
 
 // Cloudflare Turnstile site key — empty disables the widget. The Worker
 // only enforces Turnstile when ITS secret is set, so these can be turned

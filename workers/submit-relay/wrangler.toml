@@ -15,8 +15,8 @@ compatibility_date = "2025-01-01"
 REPO = "consensus-scorekeeper/consensus-scorekeeper.github.io"
 SITE_BASE = "https://consensus-scorekeeper.github.io"
 # GitHub App auth (unused when the GITHUB_TOKEN secret is set instead):
-GITHUB_APP_ID = ""
-GITHUB_INSTALLATION_ID = ""
+GITHUB_APP_ID = "4565633"
+GITHUB_INSTALLATION_ID = "153080588"
 
 [[kv_namespaces]]
 binding = "KEYS"
