@@ -79,7 +79,10 @@ src/
     rich-doc.js         ← the RichDoc IR every adapter emits: makeLine + flattenDoc
     questions.js        ← THE universal parsing core: parseQuestions(doc) → { questions,
                           issues } + computeTotalSlots + cleanTrailing + extractRichRange
-                          + richToHtml
+                          + richToHtml + inferStreakCap; handles BOTH numbering styles —
+                          gap-encoded spans (Consensus) and sequential numbering
+                          (Gradwrite 2024), where an expansion pass opens slots for
+                          streaks/Jackpots/Pyramids and shifts later questions
     diagnostics.js      ← makeIssue + analyzeQuestions (whole-pack checks) + issueSlotSet
                           + summarizeIssues (pure, DOM-free)
     pdf-text.js         ← pdf adapter: extractRichDocFromPdf (pdf.js → RichDoc;
@@ -373,8 +376,15 @@ dispatches in `src/main.js` by extension to a format **adapter**:
   `state.pdfBytes` is saved so the viewer can render pages. **PDF packs
   from consensustrivia.com are the most important input** — any change
   near the core or pdf adapter must keep `tests/golden-pdf.test.js`
-  green (byte-exact fixtures for two real packs; regenerate deliberately
-  with `node scripts/generate-golden.mjs`).
+  green (byte-exact fixtures for three real packs — two Consensus + one
+  sequentially-numbered Gradwrite; regenerate deliberately with
+  `node scripts/generate-golden.mjs`). Gradwrite's 2024 PDFs number
+  every question sequentially (a streak/Jackpot/Pyramid sits under ONE
+  number despite occupying several slots — Jackpot = one slot per part,
+  Pyramid = parts − 1, streaks = their cumulative half-point
+  allocation); the core's expansion pass detects the missing room
+  (next question = number + 1) and opens the gap by shifting later
+  questions. Gap-numbered packs are never touched by it.
 - **`.zip`** → `processZipBuffer`. A zip may hold any mix of `.pdf`,
   `.docx`, and `.txt` packs — `zipEntryFormat()` routes each entry to
   its adapter (and drops folders / `__MACOSX` junk). The dropdown gets
@@ -388,7 +398,8 @@ dispatches in `src/main.js` by extension to a format **adapter**:
   so the adapter *transpiles* paragraphs into canonical numbered lines:
   sequential numbers, `A:` answer lines, bold category headers, and
   streak spans encoded as number gaps. Each streak's cap comes from
-  `inferStreakCap(prompt, answerCount)` — a numeric prompt cap ("up to
+  `inferStreakCap(prompt, answerCount)` (lives in the core, re-exported
+  here) — a numeric prompt cap ("up to
   all N") beats the raw answer count; capless prompts ("up to every…")
   are standard and just use the answer count. Streak answers are worth
   half points, so slots are allocated from the pack's *cumulative* cap
@@ -652,9 +663,13 @@ Scorekeeper UX around this: a Submit Results button next to Export CSV
 (current game's CSV prefilled; slug remembered per device, plus datalist
 suggestions from stored keys), and a one-time end-of-game nudge toast
 (`isGameComplete()` in state.js — a heuristic, never a hard game-over
-state) shown only in Tournament Mode with the relay enabled. The modal
-shows a "✓ key on file" status line so the trust state is visible before
-submitting.
+state) shown only in Tournament Mode with the relay enabled. When a
+stored key pins down the tournament (`quickPublishSlug`: last-submitted
+slug, else the only keyed one), the nudge is one-click — **Publish now**
+submits straight from the toast (same relay call as the modal; any
+failure falls back to the prefilled modal), with Review… for the full
+form. The modal shows a "✓ key on file" status line so the trust state
+is visible before submitting.
 
 ### Pending-submission preview
 
@@ -766,7 +781,7 @@ Tests live in `tests/*.test.js`. They import from `../src/main.js` (which
 re-exports the public surface) so a future module split inside `src/` is
 transparent to tests. Notable test files:
 
-- `golden-pdf.test.js`             — THE PDF-regression tripwire: parses two real packs
+- `golden-pdf.test.js`             — THE PDF-regression tripwire: parses three real packs
                                      (via the pdfjs-dist devDependency, pinned to the CDN
                                      version) and diffs byte-exactly against
                                      `tests/fixtures/golden/*.json`; regenerate only
