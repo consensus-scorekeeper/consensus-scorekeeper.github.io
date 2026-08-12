@@ -7,9 +7,13 @@
 // for PDFs).
 
 import { extractDocxParagraphs } from './docx-text.js';
-import { parseQuestions } from './questions.js';
+import { parseQuestions, inferStreakCap } from './questions.js';
 import { makeLine } from './rich-doc.js';
 import { makeIssue } from './diagnostics.js';
+
+// Re-exported for existing importers — the cap-inference logic moved into
+// the parsing core, which also needs it for sequentially-numbered PDF packs.
+export { inferStreakCap };
 
 const QUOTE_CHARS = "‘’“”'\"";
 const QUOTE_RE = new RegExp(`[${QUOTE_CHARS.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')}]`, 'g');
@@ -31,30 +35,6 @@ const ANSWER_SPLIT_RE = /ANSWER\s*[:;]\s*/i;
 const ANSWER_SPLIT_GLOBAL_RE = /ANSWER\s*[:;]\s*/gi;
 const ANSWER_START_RE = /^\s*ANSWER\s*[:;]/i;
 const A_PREFIX_RE = /^A\s*[:;]\s*/i;
-
-// A streak's cap is how many answers the moderator may count. Prompts that
-// state a numeric cap ("name up to all SIX" / "up to five" / "name 8") win
-// over the raw answer count — writers sometimes list more accepted answers
-// than count ("up to six of the ten largest…"). Prompts with no numeric cap
-// ("name up to every…") are equally standard; there the listed answers ARE
-// the cap. Each streak answer is worth half a point, so a pack's streaks
-// jointly occupy cap-total / 2 slots — see flushStreak for how odd caps
-// share a slot across streaks.
-const NUMBER_WORDS = {
-  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
-  nine: 9, ten: 10, eleven: 11, twelve: 12,
-};
-const CAP_RE = /\b(?:up to(?:\s+all)?|name(?:\s+up\s+to)?|give(?:\s+up\s+to)?)\s+(?:all\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i;
-
-export function inferStreakCap(prompt, answerCount) {
-  const m = prompt && CAP_RE.exec(prompt);
-  if (m) {
-    const word = m[1].toLowerCase();
-    const n = NUMBER_WORDS[word] != null ? NUMBER_WORDS[word] : parseInt(word, 10);
-    if (Number.isFinite(n) && n > 0) return n;
-  }
-  return answerCount;
-}
 
 function runsPlain(runs) {
   let s = '';

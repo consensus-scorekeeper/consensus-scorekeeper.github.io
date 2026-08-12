@@ -311,3 +311,111 @@ describe('parseQuestions — stores page + y from rich segment', () => {
     expect(qs[0].yPos).toBe(480);
   });
 });
+
+// Gradwrite's 2024 packs number every question sequentially — a streak,
+// Jackpot, or Pyramid sits under ONE number even though it occupies several
+// slots. The core opens those slots up by shifting later questions (see the
+// expansion pass in parser/questions.js). Packs that already encode spans as
+// numbering gaps (Consensus PDFs, the docx transpiler, .txt packs) are
+// covered by the earlier suites + the golden tests and must not shift.
+describe('parseQuestions — sequential numbering (gradwrite 2024)', () => {
+  it('expands back-to-back streaks from prompt caps, sharing odd halves', () => {
+    const { questions: qs, issues } = parseQuestions(buildDoc([
+      { text: 'Streak', isBold: true },
+      { text: '79. Name up to all five of the X.' },
+      { text: 'A: a1' }, { text: 'A: a2' }, { text: 'A: a3' }, { text: 'A: a4' }, { text: 'A: a5' },
+      { text: 'Streak', isBold: true },
+      { text: '80. Name up to all five of the Y.' },
+      { text: 'A: b1' }, { text: 'A: b2' }, { text: 'A: b3' }, { text: 'A: b4' }, { text: 'A: b5' },
+      { text: '13-Part Blitz', isBold: true },
+      { text: '81. A normal question?' },
+      { text: 'A: z' },
+    ]));
+    // caps 5 + 5 → 3 + 2 slots (cumulative halves), not ceil-each's 3 + 3
+    expect(qs.find(q => q.answer.startsWith('a1')).streakRange).toEqual({ start: 79, end: 81 });
+    expect(qs.find(q => q.answer.startsWith('b1')).streakRange).toEqual({ start: 82, end: 83 });
+    expect(qs.find(q => q.answer === 'z').num).toBe(84);
+    expect(issues).toEqual([]);
+  });
+
+  it('splits a streak answer list written one per line under a single "A:"', () => {
+    const { questions: qs } = parseQuestions(buildDoc([
+      { text: 'Streak', isBold: true },
+      { text: '79. List up to all four of the recent champions.' },
+      { text: 'A: Texas Rangers' },
+      { text: 'Houston Astros', isBold: true },
+      { text: 'Atlanta Braves (do not accept only' },
+      { text: 'Braves )' },
+      { text: 'Los Angeles Dodgers', isBold: true },
+      { text: 'Streak', isBold: true },
+      { text: '80. Name up to all six of the Y.' },
+      { text: 'A: b1' }, { text: 'A: b2' }, { text: 'A: b3' },
+      { text: 'A: b4' }, { text: 'A: b5' }, { text: 'A: b6' },
+      { text: '13-Part Blitz', isBold: true },
+      { text: '81. A normal question?' },
+      { text: 'A: z' },
+    ]));
+    const streak = qs.find(q => q.num === 79);
+    // bold lines are answers, not category titles; the wrapped "(do not
+    // accept only / Braves )" line merges into the previous answer
+    expect(streak.answer).toBe(
+      'Texas Rangers | Houston Astros | Atlanta Braves (do not accept only Braves ) | Los Angeles Dodgers');
+    expect(streak.streakRange).toEqual({ start: 79, end: 80 });
+    expect(qs.find(q => q.answer.startsWith('b1')).streakRange).toEqual({ start: 81, end: 83 });
+    expect(qs.find(q => q.answer === 'z').num).toBe(84);
+  });
+
+  it('expands a sequential 4-clue Pyramid to 3 slots, "Clue A:" not an answer marker', () => {
+    const { questions: qs, issues } = parseQuestions(buildDoc([
+      { text: 'Pyramid – What item am I?', isBold: true },
+      { text: '10. Clue A: First hint. What item am I?' },
+      { text: 'Clue B: Second hint. What item am I?' },
+      { text: 'Clue C: Third hint. What item am I?' },
+      { text: 'Clue D: Fourth hint. What item am I?' },
+      { text: 'A: boomerang' },
+      { text: 'Set of 4: Next', isBold: true },
+      { text: '11. A normal question?' },
+      { text: 'A: n' },
+    ]));
+    expect(qs.map(q => q.num)).toEqual([10, 11, 12, 13]);
+    expect(qs[0].question).toBe('Clue A: First hint. What item am I?');
+    expect(qs[2].question).toBe(
+      'Clue C: Third hint. What item am I? Clue D: Fourth hint. What item am I?');
+    for (const n of [10, 11, 12]) expect(qs.find(q => q.num === n).answer).toBe('boomerang');
+    expect(qs.find(q => q.num === 13).answer).toBe('n');
+    expect(issues).toEqual([]);
+  });
+
+  it('expands a sequential 4-part Jackpot to 4 slots, ignoring a doubled marker', () => {
+    const { questions: qs } = parseQuestions(buildDoc([
+      { text: 'Jackpot', isBold: true },
+      { text: '10. Part 1: First clue.' },
+      { text: 'Part 2: Second clue.' },
+      { text: 'Part 3: Third clue.' },
+      { text: 'Part 4: Part 4: Fourth clue.' },
+      { text: 'A: blitz' },
+      { text: 'Set of 4: Next', isBold: true },
+      { text: '11. A normal question?' },
+      { text: 'A: n' },
+    ]));
+    expect(qs.map(q => q.num)).toEqual([10, 11, 12, 13, 14]);
+    expect(qs.find(q => q.num === 13).question).toBe('Part 4: Fourth clue.');
+    for (const n of [10, 11, 12, 13]) expect(qs.find(q => q.num === n).answer).toBe('blitz');
+    expect(qs.find(q => q.num === 14).answer).toBe('n');
+  });
+
+  it('treats a regressing line-start number as question text, not a question', () => {
+    const { questions: qs, issues } = parseQuestions(buildDoc([
+      { text: 'Set of 2: Numbers', isBold: true },
+      { text: '74. I am a sequence beginning 1, 1, 2, 3,' },
+      { text: '5. What am I?' },
+      { text: 'A: Fibonacci' },
+      { text: '75. A normal question?' },
+      { text: 'A: n' },
+    ]));
+    expect(qs.map(q => q.num)).toEqual([74, 75]);
+    expect(qs[0].question).toBe('I am a sequence beginning 1, 1, 2, 3, 5. What am I?');
+    expect(qs[0].answer).toBe('Fibonacci');
+    expect(issues.map(i => i.code)).toEqual(['out-of-sequence-number']);
+  });
+});

@@ -32,9 +32,62 @@ export function cleanTrailing(text) {
     const idx = text.indexOf(sw);
     if (idx !== -1) text = text.substring(0, idx);
   }
-  text = text.replace(/\s+(?:Set of \d+.*|Splits?:.*|PACK \d+.*|Streaks?.*|Streak)$/i, '');
+  text = text.replace(/\s+(?:Set of \d+.*|Splits?:.*|PACK \d+.*|\d+-Part Blitz.*|Streaks?.*|Streak)$/i, '');
   text = text.replace(TRAILING_WRITER_TAG_RE, '');
   return text.trim();
+}
+
+// A streak's cap is how many answers the moderator may count. Prompts that
+// state a numeric cap ("name up to all SIX" / "up to five" / "name 8") win
+// over the raw answer count — writers sometimes list more accepted answers
+// than count ("up to six of the ten largest…"). Prompts with no numeric cap
+// ("name up to every…") are equally standard; there the listed answers ARE
+// the cap. Each streak answer is worth half a point, so a pack's streaks
+// jointly occupy cap-total / 2 slots, with odd caps sharing a slot across
+// streaks (see the docx adapter's flushStreak and the sequential-numbering
+// expansion pass below for the two allocation sites).
+const NUMBER_WORDS = {
+  one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8,
+  nine: 9, ten: 10, eleven: 11, twelve: 12,
+};
+const CAP_RE = /\b(?:up to(?:\s+all)?|name(?:\s+up\s+to)?|give(?:\s+up\s+to)?)\s+(?:all\s+)?(\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve)\b/i;
+
+export function inferStreakCap(prompt, answerCount) {
+  const m = prompt && CAP_RE.exec(prompt);
+  if (m) {
+    const word = m[1].toLowerCase();
+    const n = NUMBER_WORDS[word] != null ? NUMBER_WORDS[word] : parseInt(word, 10);
+    if (Number.isFinite(n) && n > 0) return n;
+  }
+  return answerCount;
+}
+
+// Lines that are certainly structural or a known category header — used to
+// end streak answer capture. Some packs set a streak's listed answers in
+// bold, so "bold" alone can't separate an answer line from the next
+// category's title; these are the titles that actually follow streaks.
+const KNOWN_HEADER_RE = /^(?:\d+-Part\b|(?:Linked\s+)?Set of \d+|Splits?\s*:|Pyramid\b|Jackpot\b|Streaks?\b|Jailbreak\b|Double Jump\b|Mystery\b)/i;
+function isKnownHeaderText(text) {
+  if (STRUCTURAL_RE.test(text)) return true;
+  for (const sw of SECTION_WORDS) if (text.startsWith(sw)) return true;
+  return KNOWN_HEADER_RE.test(text);
+}
+
+// Split a multi-part question ("Part 1: … Part 2: …" or a Gradwrite
+// Pyramid's "Clue A: … Clue B: …") into its part chunks. A duplicated
+// marker with no content between ("Part 4: Part 4: …" — a real pack typo)
+// contributes no chunk.
+const PART_MARKER_SPLIT_RE = /\s(?=(?:Part \d+|Clue [A-Z])\s*:)/;
+const PART_MARKER_RE = /^(?:Part \d+|Clue [A-Z])\s*:\s*/;
+function splitPartChunks(text) {
+  return text.split(PART_MARKER_SPLIT_RE)
+    .filter(p => p.replace(PART_MARKER_RE, '').trim() !== '');
+}
+
+// True when the "A:" at `pos` in `text` is an answer marker rather than a
+// Pyramid clue label ("… Clue A: I am …" is clue text, not an answer).
+function isAnswerMarker(text, pos) {
+  return !/\bClue\s*$/i.test(text.slice(Math.max(0, pos - 6), pos));
 }
 
 // Returns the category title a line carries, or null if the line isn't a
@@ -86,6 +139,20 @@ export function extractRichRange(start, end, richSegments, posMap) {
   return result;
 }
 
+// Trim rich segments to a cleaned plain text's length (cleaning only ever
+// removes from the end, so a prefix of the runs covers the cleaned text).
+function trimRichTo(rich, cleanLen) {
+  let tLen = 0;
+  const trimmed = [];
+  for (const seg of rich) {
+    if (tLen >= cleanLen) break;
+    const rem = cleanLen - tLen;
+    if (seg.str.length <= rem) { trimmed.push(seg); tLen += seg.str.length; }
+    else { trimmed.push({ str: seg.str.substring(0, rem), bold: seg.bold }); tLen += rem; }
+  }
+  return trimmed;
+}
+
 // Convert rich segments to HTML
 export function richToHtml(segments) {
   return segments.map(s => {
@@ -114,6 +181,8 @@ export function parseQuestions(doc) {
   // or bare number is a category title.
   const categoryMap = {};
   const revealByNum = {};         // question num → parenthesized note following its answer
+  const streakAnswerLines = {};   // streak question num → its captured answer lines
+  let capturingStreakNum = null;  // streak num whose answer list is being collected
   let currentCategory = null;
   let currentInstructions = '';   // accumulated prose between a category title and its first question
   let captureInstructions = false; // toggled true after a bold category title; false on first qMatch
@@ -130,6 +199,7 @@ export function parseQuestions(doc) {
     // "Part N:" lines.
     const qMatch = text.match(/^(\d{1,3})\.(?:\s|$)/);
     if (qMatch) {
+      capturingStreakNum = null;
       const num = parseInt(qMatch[1]);
       if (num >= 1 && num <= 100) {
         lastQNum = num;
@@ -147,21 +217,54 @@ export function parseQuestions(doc) {
       continue;
     }
     // Skip structural markers (END OF, QUARTER labels, etc.)
-    if (STRUCTURAL_RE.test(text) || text.length < 2) continue;
-    // Skip answer/accept/prompt/reject lines
-    if (/^(A:\s|\(accept|\(prompt|\(reject)/i.test(text)) { afterAnswer = true; continue; }
+    if (STRUCTURAL_RE.test(text) || text.length < 2) { capturingStreakNum = null; continue; }
+    // Skip answer/accept/prompt/reject lines. A streak's "A:" line starts
+    // its answer capture (used to size and split sequential-numbered
+    // streaks below); later "A:" lines append.
+    if (/^(A:\s|\(accept|\(prompt|\(reject)/i.test(text)) {
+      afterAnswer = true;
+      if (/^A:\s/i.test(text) && lastQNum !== null
+          && categoryMap[lastQNum] && /streak/i.test(categoryMap[lastQNum].category || '')) {
+        (streakAnswerLines[lastQNum] = streakAnswerLines[lastQNum] || []).push({ lines: [line], isA: true });
+        capturingStreakNum = lastQNum;
+      }
+      continue;
+    }
     // Skip quarter/half markers (page headers — always uppercase in real PDFs).
-    if (/^(QUARTER|HALF)/.test(text)) continue;
+    if (/^(QUARTER|HALF)/.test(text)) { capturingStreakNum = null; continue; }
     // Skip bare numbers
     if (/^\d+$/.test(text.trim())) continue;
 
     // Detect "Splits:" header — next bold lines are numbered sub-categories
     if (/^Splits?:/i.test(text)) {
+      capturingStreakNum = null;
       inSplit = true;
       splitCount = 0;
       captureInstructions = false;
       currentInstructions = '';
       continue;
+    }
+
+    // Streak answers frequently continue on lines without their own "A:" —
+    // one answer per line, sometimes even set in bold (which would otherwise
+    // read as a category title). Capture them until a known header or a
+    // reveal note (a fully-parenthesized line, handled below) ends the
+    // block; an unrecognized line here is an answer, never a title.
+    if (capturingStreakNum !== null) {
+      if (isKnownHeaderText(text) || /^\(.+\)$/.test(text.trim())) {
+        capturingStreakNum = null;
+      } else {
+        // A line completing an unclosed parenthesis is the previous
+        // answer's wrap ("… (do not accept or prompt on only" / "Rimsky or
+        // Korsakov )"), not a new answer.
+        const entries = streakAnswerLines[capturingStreakNum];
+        const last = entries[entries.length - 1];
+        const lastText = last.lines.map(l => l.text).join(' ');
+        const unclosed = (lastText.match(/\(/g) || []).length > (lastText.match(/\)/g) || []).length;
+        if (unclosed) last.lines.push(line);
+        else entries.push({ lines: [line], isA: false });
+        continue;
+      }
     }
 
     // A bold line after an answer = category title
@@ -227,6 +330,19 @@ export function parseQuestions(doc) {
     const num = parseInt(m[1]);
     const numStartPos = m.index;
     if (num >= 1 && num <= 100 && isLineStart(numStartPos)) {
+      // Question numbers only ever count up. A line-start number that
+      // regresses is prose that happens to end a line on "N." (e.g. a
+      // Pyramid clue's "…beginning 1, 1, 2, 3, 5." wrapping before
+      // "5. What am I?") — accepting it would truncate the real question
+      // it sits inside.
+      const prevNum = questionStarts.length ? questionStarts[questionStarts.length - 1].num : 0;
+      if (num < prevNum) {
+        issues.push({
+          code: 'out-of-sequence-number', severity: 'warn',
+          message: `Found "${num}." at a line start after question ${prevNum} — treated as question text, not a question number.`,
+        });
+        continue;
+      }
       questionStarts.push({ num, pos: numStartPos });
     } else if (num > 100 && isLineStart(numStartPos)) {
       issues.push({
@@ -272,11 +388,13 @@ export function parseQuestions(doc) {
   }
 
   const questions = [];
+  const answerCountByRecord = new Map(); // record → accepted-answer count (streak sizing)
   for (let i = 0; i < questionStarts.length; i++) {
     const start = questionStarts[i];
     const endPos = i + 1 < questionStarts.length ? questionStarts[i + 1].pos : combined.length;
     const segment = combined.substring(start.pos, endPos);
     const catInfo = categoryMap[start.num] || null;
+    const isStreakQ = !!(catInfo && catInfo.category && /streak/i.test(catInfo.category));
     const nextTitle = nextCategoryTitle(i, catInfo);
     const reveal = revealByNum[start.num] || null;
     // Look up source page + Y position from the rich segment that contains this
@@ -287,14 +405,22 @@ export function parseQuestions(doc) {
       if (seg) { qPageNum = seg.page || null; qYPos = (typeof seg.y === 'number') ? seg.y : null; }
     }
 
-    const aMatch = segment.match(/\bA:\s*(.*)/);
-    if (aMatch) {
-      const qMatch = segment.match(/^\d{1,3}\.\s+([\s\S]*?)\s*\bA:\s*/);
-      if (qMatch) {
-        const questionText = qMatch[1].trim().replace(/\s+/g, ' ');
+    // First "A:" answer marker with a word boundary — skipping a Pyramid
+    // clue label's "A:" ("… Clue A: I am …" is clue text, not an answer).
+    let aMatchIdx = -1;
+    const boundaryARe = /\bA:/g;
+    let am;
+    while ((am = boundaryARe.exec(segment)) !== null) {
+      if (isAnswerMarker(segment, am.index)) { aMatchIdx = am.index; break; }
+    }
+    if (aMatchIdx !== -1) {
+      const qPrefix = segment.match(/^\d{1,3}\.\s+/);
+      if (qPrefix) {
+        const questionText = segment.slice(qPrefix[0].length, aMatchIdx).trim().replace(/\s+/g, ' ');
 
         // Find where "A:" starts in the combined string for this question
-        const aIdx = segment.indexOf('A:');
+        let aIdx = segment.indexOf('A:');
+        while (aIdx !== -1 && !isAnswerMarker(segment, aIdx)) aIdx = segment.indexOf('A:', aIdx + 2);
         const answerStartInCombined = start.pos + aIdx + 2; // skip "A:"
         // Skip whitespace after "A:"
         let ansStart = answerStartInCombined;
@@ -313,9 +439,17 @@ export function parseQuestions(doc) {
         while (true) {
           const aPos = segment.indexOf('A:', aSearchFrom);
           if (aPos === -1) break;
-          aMatches.push(aPos);
+          if (isAnswerMarker(segment, aPos)) aMatches.push(aPos);
           aSearchFrom = aPos + 2;
         }
+        // A streak whose answers were listed one per line under a single
+        // "A:" (captured in the category walk above) — split per line so
+        // the record matches the multi-"A:" shape.
+        const streakLines = isStreakQ ? (streakAnswerLines[start.num] || []) : [];
+        const splitStreakLines = aMatches.length <= 1 && streakLines.length > 1;
+        let answerCount = aMatches.length > 1 ? aMatches.length
+          : splitStreakLines ? streakLines.length
+          : aMatches.length;
         let answerHtml;
         if (aMatches.length > 1) {
           // Multiple answers — build rich HTML for each, separated by newlines
@@ -332,39 +466,45 @@ export function parseQuestions(doc) {
             const plainText = ai === aMatches.length - 1
               ? cleanAnswerText(rawText, nextTitle, reveal)
               : cleanTrailing(rawText);
-            // Trim rich HTML to match cleaned plain text length
-            const cleanLen = plainText.length;
-            let tLen = 0;
-            const trimmed = [];
-            for (const seg of rich) {
-              if (tLen >= cleanLen) break;
-              const rem = cleanLen - tLen;
-              if (seg.str.length <= rem) { trimmed.push(seg); tLen += seg.str.length; }
-              else { trimmed.push({ str: seg.str.substring(0, rem), bold: seg.bold }); tLen += rem; }
-            }
-            htmlParts.push(richToHtml(trimmed));
+            htmlParts.push(richToHtml(trimRichTo(rich, plainText.length)));
             plainParts.push(plainText);
           }
           answerHtml = htmlParts.map(h => `<div>Answer: ${h}</div>`).join('');
           answerPlain = plainParts.join(' | ');
+        } else if (splitStreakLines) {
+          const plainParts = [];
+          const htmlParts = [];
+          for (const entry of streakLines) {
+            let runs = [];
+            entry.lines.forEach((ln, li) => {
+              if (li > 0) runs.push({ str: ' ', bold: false });
+              for (const s of ln.segments || []) runs.push({ str: s.text, bold: !!s.bold });
+            });
+            let plainText = entry.lines.map(l => l.text).join(' ');
+            if (entry.isA) {
+              // Strip the "A:" prefix (and following spaces) from text + runs.
+              let drop = plainText.match(/^A:\s*/i)[0].length;
+              plainText = plainText.slice(drop);
+              const kept = [];
+              for (const r of runs) {
+                if (drop >= r.str.length) { drop -= r.str.length; continue; }
+                kept.push(drop > 0 ? { str: r.str.slice(drop), bold: r.bold } : r);
+                drop = 0;
+              }
+              runs = kept;
+            }
+            plainText = cleanTrailing(plainText.trim().replace(/\s+/g, ' '));
+            if (!plainText) continue;
+            htmlParts.push(richToHtml(trimRichTo(runs, plainText.length)));
+            plainParts.push(plainText);
+          }
+          answerHtml = htmlParts.map(h => `<div>Answer: ${h}</div>`).join('');
+          answerPlain = plainParts.join(' | ');
+          answerCount = plainParts.length;
         } else {
           // Trim the rich segments to match cleaned plain text length
-          // Remove trailing section headers from rich segments
-          const cleanLen = answerPlain.length;
-          let totalLen = 0;
-          const trimmedRich = [];
-          for (const seg of answerRich) {
-            if (totalLen >= cleanLen) break;
-            const remaining = cleanLen - totalLen;
-            if (seg.str.length <= remaining) {
-              trimmedRich.push(seg);
-              totalLen += seg.str.length;
-            } else {
-              trimmedRich.push({ str: seg.str.substring(0, remaining), bold: seg.bold });
-              totalLen += remaining;
-            }
-          }
-          answerHtml = richToHtml(trimmedRich);
+          // (removes trailing section headers from the rich segments too).
+          answerHtml = richToHtml(trimRichTo(answerRich, answerPlain.length));
         }
 
         if (questionText.length > 1) {
@@ -376,7 +516,6 @@ export function parseQuestions(doc) {
               message: `Question ${start.num} has an "A:" marker but its answer text could not be extracted.`,
             });
           }
-          const isStreakQ = !!(catInfo && catInfo.category && /streak/i.test(catInfo.category));
           // For streaks, calculate the range of question numbers this streak covers
           // (from this Q's number to next Q's number - 1)
           let streakEnd = null;
@@ -385,7 +524,7 @@ export function parseQuestions(doc) {
           } else if (isStreakQ) {
             streakEnd = 100; // last question
           }
-          questions.push({
+          const record = {
             num: start.num,
             question: cleanTrailing(questionText),
             answer: answerPlain,
@@ -397,7 +536,9 @@ export function parseQuestions(doc) {
             streakRange: isStreakQ ? { start: start.num, end: streakEnd } : null,
             pageNum: qPageNum,
             yPos: qYPos,
-          });
+          };
+          questions.push(record);
+          answerCountByRecord.set(record, answerCount);
         } else {
           issues.push({
             code: 'empty-question', severity: 'warn', slot: start.num,
@@ -435,6 +576,19 @@ export function parseQuestions(doc) {
     if (!seen.has(q.num)) {
       seen.add(q.num);
       unique.push(q);
+    } else if (q.num < 100 && !seen.has(q.num + 1) && !questions.some(o => o.num === q.num + 1)) {
+      // An otherwise-sequential pack that numbers two questions "20." has
+      // almost certainly mistyped the second one's "21" — slide it into the
+      // free number rather than dropping a real question.
+      issues.push({
+        code: 'duplicate-number', severity: 'warn', slot: q.num,
+        snippet: q.question.slice(0, 80),
+        message: `Question ${q.num} appears more than once — the second occurrence was renumbered to ${q.num + 1}.`,
+      });
+      q.num += 1;
+      if (q.streakRange) q.streakRange = { start: q.num, end: Math.max(q.streakRange.end, q.num) };
+      seen.add(q.num);
+      unique.push(q);
     } else {
       issues.push({
         code: 'duplicate-number', severity: 'warn', slot: q.num,
@@ -444,6 +598,50 @@ export function parseQuestions(doc) {
     }
   }
   unique.sort((a, b) => a.num - b.num);
+
+  // Post-process: open up slots inside sequentially-numbered packs.
+  // Consensus packs give a multi-slot question (streak, Jackpot, Pyramid)
+  // several numbers, so its span arrives encoded as a numbering gap — but
+  // Gradwrite's 2024 packs number every question sequentially, leaving such
+  // questions ONE number even though they occupy several slots (their
+  // quarters only sum to the standard 25 slots when a Jackpot takes one
+  // slot per part, a Pyramid takes parts − 1, and streaks take their
+  // cumulative half-point allocation). Where a multi-slot question's own
+  // numbering leaves it no room (the next question is number + 1), open
+  // the gap by shifting every later question — the same renumbering the
+  // docx adapter applies to unnumbered packets. Packs whose numbering
+  // already leaves gaps are never touched.
+  let shift = 0;
+  let streakCapHalves = 0; // cumulative caps across the pack's expanded streaks
+  for (let i = 0; i < unique.length; i++) {
+    const q = unique[i];
+    const gapToNext = i + 1 < unique.length ? unique[i + 1].num - q.num : null;
+    q.num += shift;
+    if (q.streakRange) {
+      q.streakRange.start += shift;
+      q.streakRange.end += shift;
+    }
+    if (gapToNext !== 1) continue;
+    let span = 1;
+    if (q.streakRange) {
+      // Slots are allocated from the cumulative cap total, not per streak:
+      // streak answers are worth half a point, so two odd-capped streaks
+      // (5 + 5) fill 5 slots, not ceil-each's 6.
+      const cap = inferStreakCap(q.question, answerCountByRecord.get(q) || 1);
+      const allocated = Math.ceil(streakCapHalves / 2);
+      streakCapHalves += cap;
+      span = Math.ceil(streakCapHalves / 2) - allocated;
+      if (span < 1) {
+        span = 1;
+        streakCapHalves = (allocated + 1) * 2;
+      }
+      q.streakRange.end = q.num + span - 1;
+    } else if (q.category && /pyramid|jackpot/i.test(q.category)) {
+      const parts = splitPartChunks(q.question).length;
+      if (parts >= 2) span = /jackpot/i.test(q.category) ? parts : parts - 1;
+    }
+    if (span > 1) shift += span - 1;
+  }
 
   // Post-process: propagate Jackpot/multi-part answers to preceding parts
   for (let i = unique.length - 1; i >= 0; i--) {
@@ -465,15 +663,15 @@ export function parseQuestions(doc) {
   }
 
   // Post-process: a Pyramid (Gradwrite's name for a Jackpot-style chain) is
-  // one numbered block — a bare "11." above unnumbered "Part N:" clues —
-  // that the pack's own numbering gives several slots (the next question
-  // being 14 means the pyramid covers 11–13). Split the parts across that
-  // gap so every slot exists and shares the block's answer; the last slot
-  // absorbs any extra parts.
+  // one numbered block — a bare "11." above unnumbered "Part N:" (or
+  // "Clue A:") lines — whose numbering gives it several slots (either from
+  // the pack itself, or opened up by the expansion pass above). Split the
+  // parts across that gap so every slot exists and shares the block's
+  // answer; the last slot absorbs any extra parts.
   for (let i = 0; i < unique.length; i++) {
     const q = unique[i];
     if (!q.category || !/pyramid|jackpot/i.test(q.category) || q.streakRange) continue;
-    const parts = q.question.split(/\s(?=Part \d+\s*:)/);
+    const parts = splitPartChunks(q.question);
     if (parts.length < 2) continue;
     const nextNum = i + 1 < unique.length ? unique[i + 1].num : 101;
     const extraSlots = Math.min(nextNum - q.num - 1, parts.length - 1);

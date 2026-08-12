@@ -17,6 +17,9 @@ const root = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const FIXTURES = [
   { pdf: 'assets/tutorial-pack.pdf', golden: 'tests/fixtures/golden/tutorial-pack.json' },
   { pdf: 'tests/fixtures/sample-pack-1.pdf', golden: 'tests/fixtures/golden/sample-pack-1.json' },
+  // Sequentially-numbered gradwrite pack: streaks/pyramids under one number,
+  // expanded by the core's renumbering pass (must yield exactly 100 slots).
+  { pdf: 'tests/fixtures/gradwrite-spring-2024-pack-1.pdf', golden: 'tests/fixtures/golden/gradwrite-spring-2024-pack-1.json' },
 ];
 
 await mkdir(path.join(root, 'tests/fixtures/golden'), { recursive: true });

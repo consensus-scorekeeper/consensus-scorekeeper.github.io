@@ -94,7 +94,7 @@ describe('analyzeQuestions', () => {
 });
 
 describe('parseQuestions issue emission', () => {
-  it('emits duplicate-number when a number repeats', () => {
+  it('renumbers a duplicate into the free next number (a mistyped "21")', () => {
     const { questions, issues } = parseQuestions(buildDoc([
       { text: 'Set of 2: Dupes', isBold: true },
       { text: '5. First version?' },
@@ -102,10 +102,30 @@ describe('parseQuestions issue emission', () => {
       { text: '5. Second version?' },
       { text: 'A: two' },
     ]));
-    expect(questions).toHaveLength(1);
+    expect(questions).toHaveLength(2);
+    expect(questions.map(q => q.num)).toEqual([5, 6]);
+    expect(questions[1].question).toBe('Second version?');
     const issue = issues.find(i => i.code === 'duplicate-number');
     expect(issue.slot).toBe(5);
+    expect(issue.message).toContain('renumbered to 6');
     expect(issue.snippet).toContain('Second version');
+  });
+
+  it('drops a duplicate when the next number is already taken', () => {
+    const { questions, issues } = parseQuestions(buildDoc([
+      { text: 'Set of 3: Dupes', isBold: true },
+      { text: '5. First version?' },
+      { text: 'A: one' },
+      { text: '5. Second version?' },
+      { text: 'A: two' },
+      { text: '6. Different question?' },
+      { text: 'A: three' },
+    ]));
+    expect(questions).toHaveLength(2);
+    expect(questions.map(q => q.num)).toEqual([5, 6]);
+    const issue = issues.find(i => i.code === 'duplicate-number');
+    expect(issue.slot).toBe(5);
+    expect(issue.message).toContain('dropped');
   });
 
   it('emits unparsed-answer when A: has no content', () => {

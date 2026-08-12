@@ -25,6 +25,9 @@ const TEXT_FIELDS = [
 const FIXTURES = [
   { name: 'tutorial-pack', pdf: 'assets/tutorial-pack.pdf' },
   { name: 'sample-pack-1', pdf: 'tests/fixtures/sample-pack-1.pdf' },
+  // Sequentially-numbered gradwrite pack (streaks/pyramids under one number,
+  // expanded to 100 slots by the core's renumbering pass).
+  { name: 'gradwrite-spring-2024-pack-1', pdf: 'tests/fixtures/gradwrite-spring-2024-pack-1.pdf' },
 ];
 
 for (const { name, pdf } of FIXTURES) {
