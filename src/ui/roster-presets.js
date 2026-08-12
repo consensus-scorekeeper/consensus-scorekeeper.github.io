@@ -37,24 +37,6 @@ export const TOURNAMENTS = [
       { name: 'Dust of Snow', players: ['Lorie Au Yeung', 'Huy Lai', 'Doug Robeson'] },
     ],
   },
-  {
-    "name": "Autocreate Smoke",
-    "slug": "zz-autocreate-smoke",
-    "rosters": [
-      {
-        "name": "Auto Reds",
-        "players": [
-          "Ada"
-        ]
-      },
-      {
-        "name": "Auto Blues",
-        "players": [
-          "Bo"
-        ]
-      }
-    ]
-  },
 ];
 
 export function getTournamentBySlug(slug) {
