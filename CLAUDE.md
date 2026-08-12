@@ -206,6 +206,11 @@ scripts/                ← helpers; run from anywhere (paths use __file__)
   remove_tournament.mjs        ← Node: deletes tournaments/<slug>/ + its registry entry;
                                   engine of the Remove-tournament workflow, also runnable
                                   locally (node scripts/remove_tournament.mjs <slug>)
+  mint_key.mjs                 ← Node: maintainer mints/rotates a slug's publishing key
+                                  via the relay's /admin/rotate (pre-approve a TD's slug
+                                  before any games exist, or replace a leaked key); admin
+                                  secret from RELAY_ADMIN_SECRET env or the git-ignored
+                                  workers/submit-relay/.admin-secret
   sync-vendored.mjs            ← refreshes src/vendor/ from canonical sibling checkouts
                                   (`npm run sync-vendored`)
 workers/

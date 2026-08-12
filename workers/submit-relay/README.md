@@ -79,7 +79,15 @@ Expected: `{"issue":N,...,"verified":false}`, a new issue in the repo
 within a second, and the bot's validation comment + PR within a minute or
 two — the pipeline treats it exactly like a hand-filed form issue.
 
-Mint a key for an existing tournament and hand it to its TD:
+Mint a key for any slug and hand it to its TD — pre-approving a slug
+before its tournament exists works too (and reserves it):
+
+```
+node scripts/mint_key.mjs <slug>        # from the repo root (see the script
+                                        # header for where the secret lives)
+```
+
+or the raw call it wraps:
 
 ```
 curl -s https://<worker>/admin/rotate -H "Authorization: Bearer $ADMIN_SECRET" \

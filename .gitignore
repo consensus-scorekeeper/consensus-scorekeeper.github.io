@@ -7,3 +7,5 @@ features.md
 _console_inspect.js
 node_modules/
 .vitest/
+# submit-relay admin secret for scripts/mint_key.mjs — never committed
+workers/submit-relay/.admin-secret
