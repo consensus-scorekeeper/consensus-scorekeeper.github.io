@@ -67,11 +67,11 @@ if (statsSection && slug) {
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
   if (handedKey || getPublishingKey(slug)) {
+    // The key is plumbing — moderators just need the action. A short
+    // confirmation on the capture visit only; afterwards, just the link.
     const note = document.createElement('p');
     note.className = 'ts-intro sf-key-saved';
-    note.append(handedKey
-      ? '🔑 Publishing key saved on this device — games you submit to this tournament now publish automatically. '
-      : '🔑 Publishing key on file — games you submit to this tournament publish automatically. ');
+    if (handedKey) note.append('✓ This device is set up for the tournament. ');
     // Carry the moderator straight into scoring: the scorekeeper lives at
     // the site root (preview.html sits one level down, per-tournament
     // pages two — the slug <meta> tells them apart). Relative, so mirrors
