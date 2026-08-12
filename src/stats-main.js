@@ -22,6 +22,7 @@ import { submitResultsLink } from './ui/submission-links.js';
 import { resolvePreviewContext } from './util/submission-preview.js';
 import { deriveTournamentName } from './util/submission.js';
 import { parseKeyFromHash, savePublishingKey, getPublishingKey } from './util/submit-relay.js';
+import { renderPublishBadge } from './ui/publish-badge.js';
 
 const slugMeta = document.querySelector('meta[name="tournament-slug"]');
 const { slug, baseDir, manifestUrl, issue } = resolvePreviewContext({
@@ -104,6 +105,10 @@ async function addRulesBriefingLink(section, beforeEl) {
   p.appendChild(link);
   section.insertBefore(p, beforeEl);
 }
+
+// Per-tournament pages sit at tournaments/<slug>/ ('../' reaches their
+// siblings); preview.html sits in tournaments/ itself.
+renderPublishBadge({ tournamentsBase: slugMeta && slugMeta.content ? '../' : '' });
 
 if (slug) {
   setupTournamentStats({

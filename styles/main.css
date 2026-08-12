@@ -1456,23 +1456,23 @@ body {
   font-size: 0.95rem;
 }
 
-/* Persistent "publishing to <slug>" badge (main.js renderPublishBadge):
-   bottom-left above the keybind hints — the corner nothing else claims
-   (nudge is bottom-center, controls bottom-right, sidebar right). */
+/* Persistent "publishing to <slug>" chip (ui/publish-badge.js, every
+   page): a quiet, semi-transparent pill bottom-left that only asserts
+   itself on hover. .above-controls lifts it over the scorekeeper's
+   bottom bar; elsewhere it hugs the corner. */
 #publish-badge {
   position: fixed;
-  bottom: 52px;
-  left: 10px;
+  bottom: 8px;
+  left: 8px;
   z-index: 55;
-  background: rgba(30, 41, 59, 0.92);
-  color: #e2e8f0;
-  padding: 5px 10px;
-  border-radius: 8px;
-  font-size: 0.78rem;
+  background: rgba(30, 41, 59, 0.5);
+  color: rgba(248, 250, 252, 0.92);
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 0.72rem;
   text-decoration: none;
-  display: flex;
-  align-items: center;
-  gap: 6px;
+  opacity: 0.55;
+  transition: opacity 0.15s;
 }
-#publish-badge:hover { background: #1e293b; color: #fff; }
-#publish-badge b { font-weight: 600; }
+#publish-badge:hover { opacity: 1; }
+#publish-badge.above-controls { bottom: 52px; left: 10px; }

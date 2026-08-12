@@ -55,6 +55,7 @@ import { escapeHtml, csvEscape } from './util/escape.js';
 import { buildResultsCsv, buildResultsFilename } from './util/csv.js';
 import { downloadTextFile } from './ui/download.js';
 import { openSubmissionForm } from './ui/submission-form.js';
+import { renderPublishBadge as renderPublishBadgeShared } from './ui/publish-badge.js';
 import {
   relayEnabled,
   loadPublishingKeys,
@@ -178,26 +179,13 @@ function submitResults() {
 const submitResultsBtn = document.getElementById('submit-results-btn');
 if (submitResultsBtn) submitResultsBtn.hidden = !relayEnabled();
 
-// Persistent "this device publishes to <slug>" badge (bottom-left, above
-// the keybind hints — the one corner nothing else claims). Shown whenever
-// a stored publishing key pins down the tournament; links to its stats
-// page. Re-rendered after submissions, since those can change the target
-// (first submit records the slug, a new-tournament submit mints a key).
+// Persistent "publishing to <slug>" chip (shared ui/publish-badge.js,
+// shown on every page). Re-rendered after submissions, since those can
+// change the target (first submit records the slug, a new-tournament
+// submit mints a key). aboveControls: the scorekeeper's bottom bar owns
+// the default corner.
 function renderPublishBadge() {
-  document.getElementById('publish-badge')?.remove();
-  if (!relayEnabled()) return;
-  let lastSlug = '';
-  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
-  const slug = quickPublishSlug(lastSlug, loadPublishingKeys());
-  if (!slug) return;
-  const badge = document.createElement('a');
-  badge.id = 'publish-badge';
-  badge.href = `tournaments/${slug}/`;
-  badge.target = '_blank';
-  badge.rel = 'noopener';
-  badge.title = 'This device is set up to publish games to this tournament — click to open its stats page';
-  badge.innerHTML = `🔑 Publishing to <b>${escapeHtml(slug)}</b>`;
-  document.body.appendChild(badge);
+  renderPublishBadgeShared({ tournamentsBase: 'tournaments/', aboveControls: true });
 }
 renderPublishBadge();
 

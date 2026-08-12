@@ -9,6 +9,10 @@
 import { TOURNAMENTS } from './ui/roster-presets.js';
 import { escapeHtml } from './util/escape.js';
 import { createTournamentLink } from './ui/submission-links.js';
+import { renderPublishBadge } from './ui/publish-badge.js';
+
+// The hub lives in tournaments/ itself, so slug pages are direct children.
+renderPublishBadge({ tournamentsBase: '' });
 
 const list = document.getElementById('tournaments-list');
 const search = document.getElementById('tournaments-search');
