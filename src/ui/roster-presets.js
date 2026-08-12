@@ -37,25 +37,6 @@ export const TOURNAMENTS = [
       { name: 'Dust of Snow', players: ['Lorie Au Yeung', 'Huy Lai', 'Doug Robeson'] },
     ],
   },
-  {
-    "name": "Relay Smoke Test",
-    "slug": "relay-smoke-test-2026",
-    "description": "Temporary end-to-end test of the submission relay — will be removed.",
-    "rosters": [
-      {
-        "name": "Smoke Reds",
-        "players": [
-          "Smoke Alice"
-        ]
-      },
-      {
-        "name": "Smoke Blues",
-        "players": [
-          "Smoke Bob"
-        ]
-      }
-    ]
-  },
 ];
 
 export function getTournamentBySlug(slug) {
