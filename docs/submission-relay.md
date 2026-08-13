@@ -163,6 +163,19 @@ revert one commit, rotate the key.
   merge, and because pushes by `GITHUB_TOKEN` don't trigger
   `update-manifest.yml`), merge, and post the 🎉/close inline (same
   reason: `finalize-submission.yml` won't fire on a `GITHUB_TOKEN` merge).
+  **Concurrent submissions** (two scorekeepers at the same tournament
+  finishing together — routine, not an edge case) are resolved by the
+  merge loop: a transient "not mergeable" is retried with backoff, and a
+  genuine conflict (both branches regenerated the manifest, corrected the
+  same game, or created the same new tournament) triggers a **rebuild** —
+  the branch is reset onto the new main and the same unchanged issue is
+  reprocessed, so the plan converges on what actually got published (the
+  already-created tournament stops being "new"; a twice-corrected game
+  overwrites by content identity, exactly as sequential corrections do).
+  The wall + verified/auto-hold checks re-run every round; three rounds,
+  then the existing drop-to-manual note. A rebuild that ends up with an
+  empty diff (the winner published identical content) closes the PR and
+  issue as completed.
 - `process-removal.yml` — handles `game-removal` issues: author wall +
   stamp + filename confined to the slug's results folder → delete file,
   regen manifest, commit directly to main, comment + close.

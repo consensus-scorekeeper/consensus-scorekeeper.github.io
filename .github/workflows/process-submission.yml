@@ -129,56 +129,116 @@ jobs:
           SLUG: ${{ steps.process.outputs.slug }}
           NEW_TOURNAMENT: ${{ steps.process.outputs.new_tournament }}
           PR_URL: ${{ steps.pr.outputs.pr_url }}
+          RELAY_BOT_LOGIN: ${{ vars.RELAY_BOT_LOGIN || 'consensus-submit-relay[bot]' }}
         run: |
           BRANCH="submission/issue-$ISSUE"
-          CHANGED=$(git diff --name-only origin/main...HEAD)
-          if [ "$NEW_TOURNAMENT" = "true" ]; then
-            OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -Ev "^tournaments/$SLUG/results/|^tournaments/$SLUG/index\.html$|^src/ui/roster-presets\.js$" || true)
-          else
-            OUTSIDE=$(printf '%s\n' "$CHANGED" | grep -v "^tournaments/$SLUG/results/" || true)
-          fi
-          if [ -n "$OUTSIDE" ]; then
+
+          # Diff wall: every file the PR changes must sit inside this
+          # slug's allowed set. Re-checked before EVERY merge attempt,
+          # including after a conflict rebuild. The new-tournament wall
+          # stays valid even if a rebuild turns the tournament into an
+          # existing one — it only ever narrows the actual diff.
+          wall_breach() {
+            if [ "$NEW_TOURNAMENT" = "true" ]; then
+              git diff --name-only origin/main...HEAD | grep -Ev "^tournaments/$SLUG/results/|^tournaments/$SLUG/index\.html$|^src/ui/roster-presets\.js$" || true
+            else
+              git diff --name-only origin/main...HEAD | grep -v "^tournaments/$SLUG/results/" || true
+            fi
+          }
+          auto_note() {
             {
               echo 'auto_note<<AUTO_NOTE_EOF'
-              echo '🔑 The publishing key checked out, but this submission changes files outside the tournament'\''s results folder, so it needs a maintainer merge:'
-              echo '```'
-              echo "$OUTSIDE"
-              echo '```'
+              cat
               echo 'AUTO_NOTE_EOF'
             } >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          }
 
-          python3 scripts/update_manifests.py
-          if [ -n "$(git status --porcelain "tournaments/$SLUG/results")" ]; then
-            git add "tournaments/$SLUG/results"
-            git commit -m "Regenerate manifest for auto-published submission #$ISSUE"
-            git push origin "$BRANCH"
-          fi
-
-          # The manifest push above leaves GitHub briefly recomputing the
-          # PR's mergeability, during which the merge API intermittently
-          # refuses with "Pull Request is not mergeable" (seen live on
-          # issue #21). Retry that specific refusal with backoff; any
-          # other error still drops to manual review immediately.
           MERGED=false
-          for DELAY in 2 3 5 10 0; do
-            if gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
-              MERGED=true
+          for ROUND in 1 2 3; do
+            OUTSIDE=$(wall_breach)
+            if [ -n "$OUTSIDE" ]; then
+              {
+                echo '🔑 The publishing key checked out, but this submission changes files outside the tournament'\''s results folder, so it needs a maintainer merge:'
+                echo '```'
+                echo "$OUTSIDE"
+                echo '```'
+              } | auto_note
+              exit 0
+            fi
+
+            # The manifest is regenerated INTO the branch because a
+            # GITHUB_TOKEN merge won't trigger update-manifest.yml.
+            python3 scripts/update_manifests.py
+            if [ -n "$(git status --porcelain "tournaments/$SLUG/results")" ]; then
+              git add "tournaments/$SLUG/results"
+              git commit -m "Regenerate manifest for auto-published submission #$ISSUE"
+            fi
+            git push -f origin "$BRANCH"
+
+            # A push (ours above, or a concurrent submission's merge)
+            # leaves GitHub briefly recomputing the PR's mergeability,
+            # during which the merge API intermittently refuses with
+            # "Pull Request is not mergeable" (seen live on issue #21).
+            # Retry that specific refusal with backoff; any other error
+            # drops to manual review immediately.
+            for DELAY in 2 3 5 10 0; do
+              if gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
+                MERGED=true
+                break
+              fi
+              if ! grep -qi 'not mergeable' merge-error.txt; then
+                ROUND=abort
+                break
+              fi
+              [ "$DELAY" = 0 ] || sleep "$DELAY"
+            done
+            [ "$MERGED" = true ] && break
+            [ "$ROUND" = abort ] && break
+
+            # Still refused after the backoff: a concurrent submission to
+            # the same tournament merged first and genuinely conflicts —
+            # both regenerated the manifest, both corrected the same game,
+            # or both created the same new tournament (all likely when two
+            # scorekeepers finish at the same event together). Resolve by
+            # rebuilding: reprocess the SAME unchanged issue on top of
+            # what actually got published. The processing script re-plans
+            # against the new main — an already-created tournament stops
+            # being "new", a twice-corrected game overwrites the published
+            # version (content identity, same as sequential corrections) —
+            # so the rebuilt branch merges cleanly next round. Its outputs
+            # go to a scratch file: status/verified are re-checked (a
+            # mid-flight auto-hold label must still drop to manual), and
+            # the step's own outputs stay unpolluted.
+            git fetch origin main
+            git checkout -B "$BRANCH" origin/main
+            REBUILD_OUT="$RUNNER_TEMP/rebuild-output-$ROUND"
+            : > "$REBUILD_OUT"
+            if ! GITHUB_OUTPUT="$REBUILD_OUT" node scripts/process-submission.mjs; then
               break
             fi
-            grep -qi 'not mergeable' merge-error.txt || break
-            [ "$DELAY" = 0 ] || sleep "$DELAY"
+            if ! grep -q '^status=ok$' "$REBUILD_OUT" || ! grep -q '^verified=true$' "$REBUILD_OUT"; then
+              break
+            fi
+            git add tournaments src/ui/roster-presets.js
+            if git diff --cached --quiet; then
+              # The concurrent winner already published identical content
+              # — nothing left to merge; this submission is just done.
+              gh pr close "$PR_URL" --delete-branch \
+                --comment "Superseded: a concurrent submission already published identical content." || true
+              echo '🎉 **Published** — a concurrent submission published identical content moments earlier; nothing further to merge.' | auto_note
+              gh issue close "$ISSUE" --reason completed || true
+              exit 0
+            fi
+            git commit -m "Add submitted results from #$ISSUE (rebuilt after concurrent publish)"
           done
+
           if [ "$MERGED" != true ]; then
             {
-              echo 'auto_note<<AUTO_NOTE_EOF'
               echo '⚠️ The publishing key checked out but the automatic merge failed — a maintainer will publish this manually:'
               echo '```'
               cat merge-error.txt
               echo '```'
-              echo 'AUTO_NOTE_EOF'
-            } >> "$GITHUB_OUTPUT"
+            } | auto_note
             exit 0
           fi
 
