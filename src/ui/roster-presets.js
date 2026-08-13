@@ -37,6 +37,28 @@ export const TOURNAMENTS = [
       { name: 'Dust of Snow', players: ['Lorie Au Yeung', 'Huy Lai', 'Doug Robeson'] },
     ],
   },
+  {
+    "name": "Scratch Playtest 2026",
+    "slug": "scratch-playtest-2026",
+    "rosters": [
+      {
+        "name": "Stanford A",
+        "players": [
+          "Bob Dylan",
+          "Bob Marley",
+          "Bob Ross"
+        ]
+      },
+      {
+        "name": "Stanford B",
+        "players": [
+          "Michael B. Jordan",
+          "Michael I. Jordan",
+          "Michael Jordan"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
