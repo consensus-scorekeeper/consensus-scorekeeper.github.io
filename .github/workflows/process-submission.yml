@@ -176,17 +176,21 @@ jobs:
             git push -f origin "$BRANCH"
 
             # A push (ours above, or a concurrent submission's merge)
-            # leaves GitHub briefly recomputing the PR's mergeability,
-            # during which the merge API intermittently refuses with
-            # "Pull Request is not mergeable" (seen live on issue #21).
-            # Retry that specific refusal with backoff; any other error
+            # leaves GitHub briefly recomputing the PR's mergeability, and
+            # the merge API then refuses in several phrasings: "Pull
+            # Request is not mergeable" (seen live on issue #21) and
+            # "Base branch was modified. Review and try the merge again."
+            # (seen live on issue #31, when the concurrent winner merged
+            # while our call was in flight). Both can be transient or a
+            # genuine conflict — retry with backoff, then let the rebuild
+            # below settle it. Any OTHER error (permissions, missing PR)
             # drops to manual review immediately.
             for DELAY in 2 3 5 10 0; do
               if gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
                 MERGED=true
                 break
               fi
-              if ! grep -qi 'not mergeable' merge-error.txt; then
+              if ! grep -qiE 'not mergeable|branch was modified|try the merge again' merge-error.txt; then
                 ROUND=abort
                 break
               fi
