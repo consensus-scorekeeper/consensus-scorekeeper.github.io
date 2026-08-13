@@ -1,18 +1,19 @@
 // The end-of-game submit nudge (main.js maybeNudgeSubmit): appears once
 // when the game completes in Tournament Mode, offers one-click Publish
 // now when a publishing key pins down the tournament, falls back to the
-// form button otherwise, dismisses, and re-arms on a new game.
+// form button otherwise, dismisses, and re-arms on a new game. Also the
+// Submit Results entry point itself: with a key pinning down the
+// tournament it publishes directly (fetch mocked — never the live
+// relay), falling back to the prefilled modal on refusal.
 //
 // Roster mode is read at module load, so it must be persisted BEFORE
 // main.js is imported — hence the dynamic import below. Keys and the
 // last-submitted slug are read per nudge, so tests vary those freely.
-// Publish now itself is never clicked here (it would call the live
-// relay); the network path is the same submitResults the modal uses.
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 
 localStorage.setItem('consensus-roster-mode-v1', 'preset');
-const { state, maybeNudgeSubmit } = await import('../src/main.js');
+const { state, maybeNudgeSubmit, submitResults } = await import('../src/main.js');
 
 const KEY = 'cs_' + 'ab'.repeat(20);
 
@@ -53,8 +54,11 @@ describe('end-of-game submit nudge', () => {
     expect(btn).toBeTruthy();
     expect(btn.dataset.slug).toBe('x-open-2026');
     expect(nudge().textContent).toContain('x-open-2026');
-    // the full form stays reachable
-    expect(nudge().querySelector('[data-action="submit-results"]')).toBeTruthy();
+    // the full form stays reachable — via the explicit Review… action
+    // (submit-results itself now direct-publishes when a key is on file)
+    const review = nudge().querySelector('[data-action="submit-review"]');
+    expect(review).toBeTruthy();
+    expect(review.dataset.slug).toBe('x-open-2026');
   });
 
   it('does not reappear after dismissal until a new game completes', () => {
@@ -76,5 +80,58 @@ describe('end-of-game submit nudge', () => {
     state.tutorialMode = true;
     maybeNudgeSubmit();
     expect(nudge()).toBeNull();
+  });
+});
+
+describe('Submit Results with a key on file', () => {
+  const realFetch = globalThis.fetch;
+  beforeEach(() => {
+    localStorage.setItem('consensus-tournament-keys-v1',
+      JSON.stringify({ 'x-open-2026': KEY }));
+    localStorage.removeItem('consensus-last-submit-slug-v1');
+    completeGame();
+  });
+  afterEach(() => {
+    globalThis.fetch = realFetch;
+    const el = nudge();
+    if (el) el.remove();
+  });
+
+  it('publishes directly — no modal, key riding along', async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        verified: true,
+        previewUrl: 'https://consensus-scorekeeper.github.io/tournaments/preview.html?slug=x-open-2026&preview=42',
+      }),
+    }));
+    await submitResults();
+    expect(globalThis.fetch).toHaveBeenCalledTimes(1);
+    const [url, init] = globalThis.fetch.mock.calls[0];
+    expect(url).toContain('/submit');
+    const body = JSON.parse(init.body);
+    expect(body.slug).toBe('x-open-2026');
+    expect(body.key).toBe(KEY);
+    // the modal was never even built…
+    expect(document.getElementById('submission-modal')).toBeNull();
+    // …and the outcome lands in the toast + last-slug memory
+    expect(nudge().textContent).toContain('Published');
+    expect(localStorage.getItem('consensus-last-submit-slug-v1')).toBe('x-open-2026');
+  });
+
+  it('falls back to the prefilled modal when the relay refuses', async () => {
+    globalThis.fetch = vi.fn(async () => ({
+      ok: false,
+      status: 422,
+      json: async () => ({ error: 'CSV did not parse' }),
+    }));
+    await submitResults();
+    const modal = document.getElementById('submission-modal');
+    expect(modal).toBeTruthy();
+    expect(modal.classList.contains('open')).toBe(true);
+    expect(modal.querySelector('#sf-slug').value).toBe('x-open-2026');
+    expect(nudge()).toBeNull();
+    modal.classList.remove('open');
   });
 });

@@ -659,17 +659,19 @@ maintainer-only Remove-tournament workflow (Actions tab), which must also
 delete the slug's KV key hash — a stale hash would let an old key publish
 into a future tournament reusing the slug.
 
-Scorekeeper UX around this: a Submit Results button next to Export CSV
-(current game's CSV prefilled; slug remembered per device, plus datalist
-suggestions from stored keys), and a one-time end-of-game nudge toast
-(`isGameComplete()` in state.js — a heuristic, never a hard game-over
-state) shown only in Tournament Mode with the relay enabled. When a
-stored key pins down the tournament (`quickPublishSlug`: last-submitted
-slug, else the only keyed one), the nudge is one-click — **Publish now**
-submits straight from the toast (same relay call as the modal; any
-failure falls back to the prefilled modal), with Review… for the full
-form. The modal shows a "✓ key on file" status line so the trust state
-is visible before submitting.
+Scorekeeper UX around this: a Submit Results button next to Export CSV,
+and a one-time end-of-game nudge toast (`isGameComplete()` in state.js —
+a heuristic, never a hard game-over state) shown only in Tournament Mode
+with the relay enabled. When a stored key pins down the tournament
+(`quickPublishSlug`: last-submitted slug, else the only keyed one), BOTH
+paths publish directly with no form — the Submit Results button and the
+toast's **Publish now** run the same `publishNow()` (same relay call as
+the modal; progress + outcome render in the toast; any failure falls
+back to the prefilled modal). The full modal (current game's CSV
+prefilled; slug remembered per device, plus datalist suggestions from
+stored keys) remains for the no-key/ambiguous cases and stays reachable
+via the toast's Review… button; it shows a "✓ key on file" status line
+so the trust state is visible before submitting.
 
 ### Pending-submission preview
 
