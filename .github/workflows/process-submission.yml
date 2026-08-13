@@ -156,7 +156,21 @@ jobs:
             git push origin "$BRANCH"
           fi
 
-          if ! gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
+          # The manifest push above leaves GitHub briefly recomputing the
+          # PR's mergeability, during which the merge API intermittently
+          # refuses with "Pull Request is not mergeable" (seen live on
+          # issue #21). Retry that specific refusal with backoff; any
+          # other error still drops to manual review immediately.
+          MERGED=false
+          for DELAY in 2 3 5 10 0; do
+            if gh pr merge "$PR_URL" --squash --delete-branch 2> merge-error.txt; then
+              MERGED=true
+              break
+            fi
+            grep -qi 'not mergeable' merge-error.txt || break
+            [ "$DELAY" = 0 ] || sleep "$DELAY"
+          done
+          if [ "$MERGED" != true ]; then
             {
               echo 'auto_note<<AUTO_NOTE_EOF'
               echo '⚠️ The publishing key checked out but the automatic merge failed — a maintainer will publish this manually:'
