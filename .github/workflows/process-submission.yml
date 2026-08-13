@@ -58,8 +58,13 @@ jobs:
           # submissions append a registry entry to it.
           git add tournaments src/ui/roster-presets.js
           if git diff --cached --quiet; then
+            # Everything submitted is already published byte-identically
+            # (a resubmit, a double-tap, or the loser of a same-content
+            # race) — the submitter's intent is satisfied, so resolve the
+            # issue instead of stranding it open with no PR.
             echo "No changes — submitted games are identical to what's already published."
-            echo "pr_note=No changes: every submitted game is already published with identical stats." >> "$GITHUB_OUTPUT"
+            echo "pr_note=✅ Nothing to merge: every submitted game is already published with identical stats." >> "$GITHUB_OUTPUT"
+            gh issue close "$ISSUE" --reason completed || true
             exit 0
           fi
           git commit -m "Add submitted results from #$ISSUE"
