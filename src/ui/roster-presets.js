@@ -59,6 +59,28 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "Pocket Dimension Consensus 2026",
+    "slug": "pocket-dimension-consensus-2026",
+    "rosters": [
+      {
+        "name": "Berkeley A",
+        "players": [
+          "Adam",
+          "Eve",
+          "Joseph"
+        ]
+      },
+      {
+        "name": "Berkeley B",
+        "players": [
+          "Methuselah",
+          "Enoch",
+          "Ibrahim"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
