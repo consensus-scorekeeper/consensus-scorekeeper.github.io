@@ -8,6 +8,8 @@ import {
   loadPublishingKeys,
   getPublishingKey,
   savePublishingKey,
+  loadLastSubmitSlug,
+  saveLastSubmitSlug,
   keyHandoutUrl,
   parseKeyFromHash,
   quickPublishSlug,
@@ -75,5 +77,16 @@ describe('quickPublishSlug (one-click Publish now target)', () => {
     expect(quickPublishSlug('', KEYS)).toBe('');
     expect(quickPublishSlug('', {})).toBe('');
     expect(quickPublishSlug('no-key-slug', {})).toBe('');
+  });
+
+  it('a setup link retargets a device that already holds other keys', () => {
+    // What stats-main.js does on a key-handout visit: save the key AND
+    // the last-submit slug, so the new tournament wins the tiebreaker.
+    localStorage.clear();
+    savePublishingKey('old-open-2026', 'cs_' + 'ab'.repeat(20));
+    saveLastSubmitSlug('old-open-2026');
+    savePublishingKey('new-open-2026', 'cs_' + 'cd'.repeat(20));
+    saveLastSubmitSlug('new-open-2026');
+    expect(quickPublishSlug(loadLastSubmitSlug(), loadPublishingKeys())).toBe('new-open-2026');
   });
 });

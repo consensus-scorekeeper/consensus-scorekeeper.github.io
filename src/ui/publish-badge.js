@@ -13,18 +13,15 @@
 import {
   relayEnabled,
   loadPublishingKeys,
+  loadLastSubmitSlug,
   quickPublishSlug,
 } from '../util/submit-relay.js';
 import { escapeHtml } from '../util/escape.js';
 
-const LAST_SUBMIT_SLUG_KEY = 'consensus-last-submit-slug-v1';
-
 export function renderPublishBadge({ tournamentsBase, aboveControls = false } = {}) {
   document.getElementById('publish-badge')?.remove();
   if (!relayEnabled()) return;
-  let lastSlug = '';
-  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
-  const slug = quickPublishSlug(lastSlug, loadPublishingKeys());
+  const slug = quickPublishSlug(loadLastSubmitSlug(), loadPublishingKeys());
   if (!slug) return;
   const badge = document.createElement('a');
   badge.id = 'publish-badge';

@@ -59,6 +59,8 @@ import { renderPublishBadge as renderPublishBadgeShared } from './ui/publish-bad
 import {
   relayEnabled,
   loadPublishingKeys,
+  loadLastSubmitSlug,
+  saveLastSubmitSlug,
   quickPublishSlug,
   submitResults as sendResultsToRelay,
 } from './util/submit-relay.js';
@@ -163,16 +165,13 @@ function exportCsv() {
 // no-key/ambiguous cases, and stays reachable via the toast's Review…
 // button. The published tournament's slug isn't derivable from local
 // state — custom-tournament slugs are device-local — so the last slug
-// submitted from this device is remembered instead. The button is
-// revealed at startup only when the relay is configured.
-const LAST_SUBMIT_SLUG_KEY = 'consensus-last-submit-slug-v1';
-function lastSubmitSlug() {
-  try { return localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { return ''; }
-}
+// this device submitted to (or was handed a setup link for) is
+// remembered instead (util/submit-relay.js). The button is revealed at
+// startup only when the relay is configured.
 function submitResults() {
-  const quickSlug = quickPublishSlug(lastSubmitSlug(), loadPublishingKeys());
+  const quickSlug = quickPublishSlug(loadLastSubmitSlug(), loadPublishingKeys());
   if (quickSlug) return publishNow(quickSlug);
-  return openSubmitModal(lastSubmitSlug());
+  return openSubmitModal(loadLastSubmitSlug());
 }
 // The full submission modal with this game's CSV prefilled (no
 // export/re-upload round trip).
@@ -182,7 +181,7 @@ function openSubmitModal(slug) {
     slug,
     csv: buildResultsCsv(state),
     onDone: ({ slug }) => {
-      try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+      saveLastSubmitSlug(slug);
       renderPublishBadge();
     },
   });
@@ -222,9 +221,7 @@ function maybeNudgeSubmit() {
     return;
   }
   if (!submitNudgeArmed) return;
-  let lastSlug = '';
-  try { lastSlug = localStorage.getItem(LAST_SUBMIT_SLUG_KEY) || ''; } catch { /* ignore */ }
-  const quickSlug = quickPublishSlug(lastSlug, loadPublishingKeys());
+  const quickSlug = quickPublishSlug(loadLastSubmitSlug(), loadPublishingKeys());
   // Tournament Mode is one signal that this device is tournament staff; a
   // publishing key on file (arrived via a TD's setup link) is the other —
   // moderators who came in through the link never touch Tournament Mode.
@@ -271,7 +268,7 @@ async function publishNow(slug) {
     openSubmitModal(slug);
     return;
   }
-  try { localStorage.setItem(LAST_SUBMIT_SLUG_KEY, slug); } catch { /* ignore */ }
+  saveLastSubmitSlug(slug);
   renderPublishBadge();
   if (!toast.isConnected) document.body.appendChild(toast);
   const previewUrl = result.data.previewUrl || '';

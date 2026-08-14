@@ -21,7 +21,7 @@ import { getTournamentBySlug } from './ui/roster-presets.js';
 import { submitResultsLink } from './ui/submission-links.js';
 import { resolvePreviewContext } from './util/submission-preview.js';
 import { deriveTournamentName } from './util/submission.js';
-import { parseKeyFromHash, savePublishingKey, getPublishingKey } from './util/submit-relay.js';
+import { parseKeyFromHash, savePublishingKey, getPublishingKey, saveLastSubmitSlug } from './util/submit-relay.js';
 import { renderPublishBadge } from './ui/publish-badge.js';
 
 const slugMeta = document.querySelector('meta[name="tournament-slug"]');
@@ -65,6 +65,10 @@ if (statsSection && slug) {
   const handedKey = parseKeyFromHash(window.location.hash);
   if (handedKey) {
     savePublishingKey(slug, handedKey);
+    // Opening a setup link declares "this device works THIS tournament
+    // now" — retarget one-click publishing (and the badge) to it, even
+    // when other tournaments' keys are already stored.
+    saveLastSubmitSlug(slug);
     history.replaceState(null, '', window.location.pathname + window.location.search);
   }
   if (handedKey || getPublishingKey(slug)) {

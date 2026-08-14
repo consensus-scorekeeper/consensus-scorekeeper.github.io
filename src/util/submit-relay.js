@@ -55,6 +55,20 @@ export function savePublishingKey(slug, key) {
   } catch { /* ignore */ }
 }
 
+// The last slug this device submitted to — or was handed a setup link
+// for, which declares "this device works THAT tournament now" just as
+// strongly. It's quickPublishSlug's tiebreaker when several keys are
+// stored (a maintainer or a TD running several events accumulates them).
+const LAST_SLUG_STORAGE_KEY = 'consensus-last-submit-slug-v1';
+
+export function loadLastSubmitSlug() {
+  try { return localStorage.getItem(LAST_SLUG_STORAGE_KEY) || ''; } catch { return ''; }
+}
+
+export function saveLastSubmitSlug(slug) {
+  try { localStorage.setItem(LAST_SLUG_STORAGE_KEY, slug); } catch { /* ignore */ }
+}
+
 // ---------- relay calls ----------
 
 // Uniform result: { ok, status, data } — data is the Worker's JSON body
