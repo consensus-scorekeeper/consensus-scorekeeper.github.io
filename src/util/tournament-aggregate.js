@@ -69,13 +69,13 @@ export function aggregateTournament(games) {
     return x.name.localeCompare(y.name);
   });
 
-  // Player leaderboard sort: total points desc, then ppg desc, then name.
+  // Player leaderboard sort: ppg desc, then total points desc, then name.
   const leaderboard = Array.from(players.values()).map((p) => ({
     ...p,
     ppg: p.gamesPlayed ? p.points / p.gamesPlayed : 0,
   })).sort((x, y) => {
-    if (y.points !== x.points) return y.points - x.points;
     if (y.ppg !== x.ppg) return y.ppg - x.ppg;
+    if (y.points !== x.points) return y.points - x.points;
     return x.name.localeCompare(y.name);
   });
 

@@ -56,7 +56,8 @@ describe('aggregateTournament', () => {
     const alice = agg.leaderboard.find((p) => p.name === 'Alice');
     expect(alice).toMatchObject({ points: 110, gamesPlayed: 2, bestGame: 60 });
     expect(alice.ppg).toBe(55);
-    expect(agg.leaderboard.map((p) => p.name)).toEqual(['Alice', 'Bob', 'Carla']);
+    // Sorted by ppg: Alice 55, Carla 50 (fewer total points than Bob), Bob 35.
+    expect(agg.leaderboard.map((p) => p.name)).toEqual(['Alice', 'Carla', 'Bob']);
     expect(agg.summary.bestPlayerGame).toMatchObject({ name: 'Alice', points: 60 });
   });
 
