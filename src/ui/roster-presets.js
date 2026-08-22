@@ -117,6 +117,30 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "Coprolite",
+    "slug": "coprolite",
+    "rosters": [
+      {
+        "name": "Spencer Jones fans",
+        "players": [
+          "Noah Sheidlower",
+          "Zachary Joseph",
+          "Tejas Raje",
+          "Ryan Rosenberg"
+        ]
+      },
+      {
+        "name": "crusty crustacean asians",
+        "players": [
+          "Brandon Weiss",
+          "Isaac Mammel",
+          "Chauncey Lo",
+          "Hazel Singh"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
