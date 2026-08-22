@@ -97,6 +97,15 @@ describe('canonicalResultsFilename', () => {
     const parsed = parseResultsCsv(makeCsv({ packet: 'Pack: #1?.pdf', teamA: 'A/B' }));
     expect(canonicalResultsFilename(parsed)).toBe('Pack_ _1_ - A_B vs Bravos.csv');
   });
+
+  it('never starts a name component with a Jekyll-ignored character (_ . # ~)', () => {
+    // "(no packet loaded)" used to become "_no packet loaded_ - …", which
+    // GitHub Pages refused to serve (404 → "1 failed" on the stats page).
+    const parsed = parseResultsCsv(makeCsv({ packet: '(no packet loaded)', teamA: '.hidden', teamB: '~tmp' }));
+    expect(canonicalResultsFilename(parsed)).toBe('no packet loaded_ - hidden vs tmp.csv');
+    const again = parseResultsCsv(makeCsv({ packet: '#1.pdf', teamA: '___x' }));
+    expect(canonicalResultsFilename(again)).toBe('1 - x vs Bravos.csv');
+  });
 });
 
 describe('planSubmissionWrites', () => {

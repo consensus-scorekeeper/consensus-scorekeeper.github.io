@@ -66,7 +66,13 @@ export function gameIdentityKey(parsed) {
 // util/csv.js's buildResultsFilename, minus the export stamp, so repeated
 // submissions of one game map to one stable name.
 export function canonicalResultsFilename(parsed) {
-  const sanitize = (s) => String(s || '').replace(/[^a-z0-9 _-]/gi, '_').trim();
+  // Leading `_`/`.`/`#`/`~` are stripped after sanitizing: Jekyll (GitHub
+  // Pages' default) silently refuses to publish files whose names start
+  // with those, so e.g. the "(no packet loaded)" placeholder must not
+  // become "_no packet loaded_ - ….csv". (The repo also ships .nojekyll,
+  // so this is belt-and-braces for any mirror that still runs Jekyll.)
+  const sanitize = (s) =>
+    String(s || '').replace(/[^a-z0-9 _-]/gi, '_').replace(/^[_.#~\s]+/, '').trim();
   const packBase =
     sanitize(String(parsed.packet || 'consensus-stats').replace(/\.pdf$/i, '')) ||
     'consensus-stats';

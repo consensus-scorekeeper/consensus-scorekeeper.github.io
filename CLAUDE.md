@@ -714,6 +714,12 @@ the canonical repo explicitly (`SUBMISSIONS_REPO` in
 `util/submit-results.js`), never `location.href`, so copies of the site
 still file submissions in the right place.
 
+The root `.nojekyll` is load-bearing: without it GitHub Pages runs
+Jekyll, which silently drops any file whose name starts with `_`, `.`,
+`#`, or `~` — a published CSV named `_no packet loaded_ - ….csv` once
+404'd on the live page for exactly this reason. `canonicalResultsFilename`
+also strips those leading characters, so both guards must stay.
+
 ## Phone buzzers (rooms)
 
 Players join on their phones with a 4-letter room code (`player.html`)
