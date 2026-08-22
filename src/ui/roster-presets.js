@@ -141,6 +141,27 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "Coprolite 2026",
+    "slug": "coprolite-2026",
+    "rosters": [
+      {
+        "name": "the meow of howe street",
+        "players": [
+          "Tosca Zhang",
+          "Jacob Hardin-Bernhardt",
+          "Madinah Asif",
+          "Owen Mimno"
+        ]
+      },
+      {
+        "name": "Rangers Q.B.C. be like \"For 10 points and the IRA\"",
+        "players": [
+          "John Haslun"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
