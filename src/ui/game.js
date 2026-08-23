@@ -9,11 +9,13 @@ import { escapeHtml } from '../util/escape.js';
 import { issueSlotSet } from '../parser/diagnostics.js';
 import { rebuildJailbreakLocks } from '../game/jailbreak.js';
 import { getInitials, getAnsweredBy } from '../game/categories.js';
+import { isBenched } from '../util/participation.js';
 import { saveState } from '../game/persistence.js';
 import { syncInlinePdfToQuestion } from './pdf-viewer.js';
 import { pushScoreboardUpdate } from './scoreboard-popout.js';
 import { reconcileRoom, syncRoom, preselectIndex } from './room.js';
 import { attachDragReorder } from './drag-reorder.js';
+import { attachPlayerMenu, closePlayerMenu } from './player-menu.js';
 
 // Pads `state.questions` from the flat parsed list to a slot-indexed array
 // (slot i = question number i+1). Called by startGame and reparseCurrentPdf.
@@ -46,8 +48,8 @@ export function startGame() {
   }
   state.teamA.score = 0;
   state.teamB.score = 0;
-  state.teamA.players.forEach(p => p.points = 0);
-  state.teamB.players.forEach(p => p.points = 0);
+  state.teamA.players.forEach(p => { p.points = 0; p.subs = []; });
+  state.teamB.players.forEach(p => { p.points = 0; p.subs = []; });
   state.currentQuestion = 0;
   state.history = [];
   state.answeredQuestions = new Set();
@@ -87,6 +89,7 @@ export function backToSetup() {
 }
 
 export function renderGame() {
+  closePlayerMenu();  // rows are about to be rebuilt under it
   rebuildJailbreakLocks();
   reconcileRoom();  // drop stale buzz preselects BEFORE panels render
   document.getElementById('game-team-a-name').textContent = state.teamA.name;
@@ -412,20 +415,29 @@ export function renderPlayerPanel(team) {
     else if (team === 'b' && i < 5) keybind = i + 5;
     else if (team === 'b' && i === 5) keybind = 0;
     const points = isStreak ? 5 : 10;
-    const scoreBtn = `<button draggable="false" class="btn ${isStreak ? 'btn-5' : 'btn-10'}" data-action="add-points" data-team="${team}" data-index="${i}" data-points="${points}">+${points}</button>`;
-    const locked = lockSet && lockSet.includes(i);
+    const benched = isBenched(p);
+    // A benched player can't score (no button, and keybinds/phone buzzes
+    // skip them — see keybinds.js / room.js). Sub out / Sub in / +- points
+    // live in the row's context menu (right-click or ⋯, ui/player-menu.js).
+    const scoreBtn = benched ? '' : `<button draggable="false" class="btn ${isStreak ? 'btn-5' : 'btn-10'}" data-action="add-points" data-team="${team}" data-index="${i}" data-points="${points}">+${points}</button>`;
+    const menuBtn = `<button draggable="false" class="btn btn-row-menu" data-action="player-menu" title="More: sub out/in, +/- points (or right-click the row)" aria-label="More actions for ${escapeHtml(p.name)}">&#8943;</button>`;
+    const locked = !benched && lockSet && lockSet.includes(i);
     const lockedClass = locked ? ' player-row-locked' : '';
+    const benchedClass = benched ? ' player-row-benched' : '';
     const lockedTag = locked ? '<span class="player-lock-tag" title="Already buzzed this jailbreak round">locked</span>' : '';
+    const outSince = benched ? p.subs[p.subs.length - 1].out : null;
+    const outSinceNum = benched ? (state.questions[outSince]?.num ?? outSince + 1) : null;
+    const benchedTag = benched ? `<span class="player-lock-tag player-sub-tag" title="Subbed out — not playing">out since Q${outSinceNum}</span>` : '';
     const buzzedClass = i === buzzedIdx ? ' player-row-buzzed' : '';
     const assignClass = assignMode ? ' player-row-assignable' : '';
-    return `<div class="player-row${lockedClass}${buzzedClass}${assignClass}" draggable="true" data-team="${team}" data-index="${i}">
+    return `<div class="player-row${lockedClass}${benchedClass}${buzzedClass}${assignClass}" draggable="true" data-team="${team}" data-index="${i}">
       <span class="drag-handle" aria-hidden="true" title="Drag to reorder">&#x2630;</span>
       ${keybind !== null ? `<span class="player-keybind">${keybind}</span>` : ''}
       <span class="player-name">${escapeHtml(p.name)}</span>
-      ${lockedTag}
+      ${lockedTag}${benchedTag}
       <span class="player-points">${p.points}</span>
       <div class="player-actions">
-        ${scoreBtn}
+        ${scoreBtn}${menuBtn}
       </div>
     </div>`;
   }).join('');
@@ -441,7 +453,8 @@ export function setupGameScreen() {
   // Subscribe renderGame as the single state-change listener.
   subscribe(() => renderGame());
 
-  // Player panels: "+10" / "+5" buttons, plus drag-to-reorder. The reducer
+  // Player panels: "+10" / "+5" buttons, the ⋯ / right-click context menu
+  // (ui/player-menu.js), plus drag-to-reorder. The reducer
   // (reorderPlayer) calls notify(), which fires renderGame and re-renders
   // both panels — no manual re-render needed here.
   for (const team of ['a', 'b']) {
@@ -454,6 +467,7 @@ export function setupGameScreen() {
         addPoints(btn.dataset.team, parseInt(btn.dataset.index, 10), parseInt(btn.dataset.points, 10));
         return;
       }
+      if (e.target.closest('button[data-action="player-menu"]')) return; // ui/player-menu.js
       // Unmatched phone buzz pending: clicking a player row assigns that
       // phone to the roster player (see ui/room.js).
       const row = e.target.closest('.player-row');
@@ -463,6 +477,7 @@ export function setupGameScreen() {
       }
     });
     attachDragReorder(panel, { itemSelector: '.player-row' });
+    attachPlayerMenu(panel);
   }
 
   // Sidebar: question buttons.

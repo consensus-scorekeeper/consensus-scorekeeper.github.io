@@ -148,3 +148,39 @@ describe('gamesForTeam', () => {
     expect(yGames[1]).toMatchObject({ opponent: 'Z', teamScore: 70, opponentScore: 70, result: 'T' });
   });
 });
+
+describe('substitutions — fractional games played', () => {
+  const games = [
+    game({ id: 'g1', a: 'X', b: 'Y', scoreA: 100, scoreB: 80, players: [
+      { name: 'Full', team: 'X', points: 60, played: 1 },
+      { name: 'Half', team: 'X', points: 40, played: 0.5 },
+      { name: 'Old', team: 'Y', points: 80 },                     // pre-column CSV: no `played`
+    ] }),
+    game({ id: 'g2', a: 'X', b: 'Y', scoreA: 50, scoreB: 90, players: [
+      { name: 'Full', team: 'X', points: 30, played: 1 },
+      { name: 'Half', team: 'X', points: 20, played: 0.25 },
+      { name: 'Bench', team: 'X', points: 0, played: 0 },         // rostered, never played
+      { name: 'Old', team: 'Y', points: 90 },
+    ] }),
+  ];
+
+  it('sums Played into gamesPlayed (1 when absent) and rates PPG per full game', () => {
+    const agg = aggregateTournament(games);
+    const by = Object.fromEntries(agg.leaderboard.map((p) => [p.name, p]));
+    expect(by['Full']).toMatchObject({ points: 90, gamesPlayed: 2, appearances: 2, ppg: 45 });
+    expect(by['Half']).toMatchObject({ points: 60, gamesPlayed: 0.75, appearances: 2, ppg: 80 });
+    expect(by['Old']).toMatchObject({ points: 170, gamesPlayed: 2, appearances: 2, ppg: 85 });
+    expect(by['Bench']).toMatchObject({ points: 0, gamesPlayed: 0, appearances: 1, ppg: 0 });
+  });
+
+  it('gamesForPlayer carries each game\'s played fraction', () => {
+    expect(gamesForPlayer(games, 'Half', 'X').map((g) => g.played)).toEqual([0.5, 0.25]);
+    expect(gamesForPlayer(games, 'Old', 'Y').map((g) => g.played)).toEqual([1, 1]);
+  });
+
+  it('team standings are untouched by substitutions', () => {
+    const agg = aggregateTournament(games);
+    const x = agg.standings.find((t) => t.name === 'X');
+    expect(x).toMatchObject({ wins: 1, losses: 1, gamesPlayed: 2 });
+  });
+});

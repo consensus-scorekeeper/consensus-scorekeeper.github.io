@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { state, addPoints, undoLast, clearCurrentQuestion } from '../src/main.js';
+import { state, addPoints, undoLast, clearCurrentQuestion, subOut, subIn, reorderPlayer } from '../src/main.js';
 import { resetState, makeQ } from './helpers.js';
 
 beforeEach(() => {
@@ -126,5 +126,55 @@ describe('clearCurrentQuestion', () => {
     clearCurrentQuestion();
     expect(state.teamA.score).toBe(0);
     expect(state.answeredQuestions.has(0)).toBe(false);
+  });
+});
+
+describe('subOut / subIn (substitutions)', () => {
+  it('subOut opens an interval at the current slot; subIn closes it at the current slot', () => {
+    state.currentQuestion = 1;
+    subOut('a', 0);
+    expect(state.teamA.players[0].subs).toEqual([{ out: 1, in: null }]);
+    state.currentQuestion = 2;
+    subIn('a', 0);
+    expect(state.teamA.players[0].subs).toEqual([{ out: 1, in: 2 }]);
+  });
+
+  it('is a no-op on a player already in that state, or on a bad index', () => {
+    subIn('a', 0);
+    expect(state.teamA.players[0].subs).toBeUndefined();
+    subOut('a', 0);
+    subOut('a', 0);
+    expect(state.teamA.players[0].subs).toEqual([{ out: 0, in: null }]);
+    expect(() => subOut('b', 9)).not.toThrow();
+    expect(() => subIn('b', 9)).not.toThrow();
+  });
+
+  it('sub in at (or before) the slot they went out on cancels the sub outright', () => {
+    state.currentQuestion = 2;
+    subOut('b', 0);
+    subIn('b', 0); // mis-click, same question
+    expect(state.teamB.players[0].subs).toEqual([]);
+    subOut('b', 0);
+    state.currentQuestion = 1; // moderator navigated backwards
+    subIn('b', 0);
+    expect(state.teamB.players[0].subs).toEqual([]);
+  });
+
+  it('sub out again at the slot they came back in on reopens that interval (no overlap)', () => {
+    state.currentQuestion = 0;
+    subOut('a', 1);
+    state.currentQuestion = 2;
+    subIn('a', 1);
+    subOut('a', 1); // changed their mind on the same question
+    expect(state.teamA.players[1].subs).toEqual([{ out: 0, in: null }]);
+  });
+
+  it('intervals survive drag-reorder because they live on the player', () => {
+    state.currentQuestion = 1;
+    subOut('a', 1);
+    reorderPlayer('a', 1, 0);
+    expect(state.teamA.players[0].name).toBe('A2');
+    expect(state.teamA.players[0].subs).toEqual([{ out: 1, in: null }]);
+    expect(state.teamA.players[1].subs).toBeUndefined();
   });
 });

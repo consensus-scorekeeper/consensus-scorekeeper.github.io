@@ -5,6 +5,7 @@
 
 import { state } from '../state.js';
 import { getSplitPair, getCategoryRunSize, getAnsweredBy } from '../game/categories.js';
+import { isBenched } from '../util/participation.js';
 
 const SCOREBOARD_CHANNEL = 'consensus-scoreboard';
 const scoreboardChannel = (typeof BroadcastChannel !== 'undefined') ? new BroadcastChannel(SCOREBOARD_CHANNEL) : null;
@@ -32,17 +33,19 @@ export function getScoreboardSnapshot() {
   }
   const splitPair = getSplitPair(state.currentQuestion, q.category);
   const isJailbreak = !!(q.category && /jailbreak/i.test(q.category));
+  // benched: currently subbed out (displays muted; their phone can't buzz).
+  const players = (team) => team.players.map(p => ({ name: p.name, points: p.points, benched: isBenched(p) }));
   return {
     type: 'state',
     teamA: {
       name: state.teamA.name,
       score: state.teamA.score,
-      players: state.teamA.players.map(p => ({ name: p.name, points: p.points })),
+      players: players(state.teamA),
     },
     teamB: {
       name: state.teamB.name,
       score: state.teamB.score,
-      players: state.teamB.players.map(p => ({ name: p.name, points: p.points })),
+      players: players(state.teamB),
     },
     qNum: q.num || (state.currentQuestion + 1),
     qTotal: state.questions.length || 100,
@@ -175,6 +178,8 @@ const SCOREBOARD_POPOUT_HTML = `<!doctype html>
     text-decoration: line-through;
     background: #161617;
   }
+  .roster li.benched { opacity: 0.3; font-style: italic; background: #161617; }
+  .roster li.benched::after { content: " (sub)"; font-size: 0.7em; color: #888; }
 </style>
 </head>
 <body>
@@ -254,7 +259,7 @@ const SCOREBOARD_POPOUT_HTML = `<!doctype html>
       $('ra-name').textContent = d.teamA.name;
       $('rb-name').textContent = d.teamB.name;
       const buildRoster = (players, locked) => players.map((p, i) => {
-        const cls = locked.indexOf(i) !== -1 ? 'locked' : '';
+        const cls = p.benched ? 'benched' : (locked.indexOf(i) !== -1 ? 'locked' : '');
         const safe = String(p.name).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
         return '<li class="' + cls + '">' + safe + '</li>';
       }).join('');

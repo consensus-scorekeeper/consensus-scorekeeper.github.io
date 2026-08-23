@@ -96,7 +96,8 @@ src/
                           emits line-numbered txt-* issues, feeds parseQuestions
   game/
     streaks.js          ← rebuildStreakGroups
-    jailbreak.js        ← rebuildJailbreakLocks
+    jailbreak.js        ← rebuildJailbreakLocks (round resets when every AVAILABLE
+                          player has buzzed — subbed-out players don't count)
     categories.js       ← getInitials, getAnsweredBy, getSplitPair, getCategoryRunSize
     room-logic.js       ← PURE phone-buzzer rules: computeDesiredArmed (arm lifecycle),
                           matchNameToRoster (join-name → roster, by NAME so reorder
@@ -117,6 +118,9 @@ src/
                           (used by roster-manager.js)
     download.js         ← downloadTextFile: Blob + anchor-click browser download
     drag-reorder.js     ← attachDragReorder: HTML5 drag handler for roster lists / panels
+    player-menu.js      ← per-player context menu on the game rows (right-click / ⋯):
+                          Sub out/in, +/- points (preselects the custom-award panel),
+                          clear this question's points; one element on <body>
     game.js             ← renderGame (single state subscriber), renderQuestion, etc.
     pdf-viewer.js       ← inline + fullscreen pack viewer: pdf.js canvas for PDFs,
                           rendered state.packDoc text for .docx/.txt packs
@@ -159,6 +163,10 @@ src/
   util/
     escape.js           ← escapeHtml, csvEscape
     csv.js              ← buildResultsCsv, buildResultsFilename (used by exportCsv)
+    participation.js    ← substitutions, pure: player.subs intervals → isBenched /
+                          isBenchedAt / playedFraction (share of the pack's real slots
+                          the player was on the floor for) + the CSV Played cell
+                          (formatPlayed / parsePlayed — blank = 1, so old CSVs load)
     submit-results.js   ← submitResultsUrl: URL of the GitHub submit-results issue
                           form (slug prefilled when given); rendered as links by
                           ui/submission-links.js
@@ -777,6 +785,48 @@ in the scoreboard.
 - `state.room` is transient (saveState's whitelist skips it): reloading
   the page leaves the room.
 
+## Substitutions (Sub out / Sub in)
+
+Right-click any player row on the game screen (or its small ⋯ button —
+touch-friendly and discoverable) for a context menu (`ui/player-menu.js`):
+**Sub out / Sub in from Q<n>**, **+/- points…** (opens the scoreboard's
+custom-award panel with that player preselected), and **Clear this
+question's +N** when that player holds the current answer. +10 stays the
+row's one-click primary. A benched row turns muted, loses +10, and shows
+"out since Q<n>". Why it exists: jailbreak rounds used to need EVERY
+rostered player to buzz before the team unlocked, so a 5-person roster
+with one player sitting out stayed locked forever.
+
+- **Model** (`util/participation.js`, pure): `player.subs` is a list of
+  benched intervals `{ out, in }` over slot indices (`in: null` while
+  still out). Reducers `subOut`/`subIn` (state.js) open/close an
+  interval at `state.currentQuestion`; Sub in at (or before) the slot
+  they went out on cancels it outright, so a mis-click leaves nothing
+  behind. Intervals live on the player object, so drag-reorder,
+  persistence (`consensus-state-v1`) and `startGame`'s reset
+  (`subs = []`) need no special handling. Players with no `subs` played
+  everything — that covers every pre-feature roster and saved game.
+- **Jailbreak**: `rebuildJailbreakLocks` resets a team's lock when every
+  player available *at that buzz's slot* is in it (replaying old rounds
+  with today's bench would reset them early), plus a final check against
+  the current slot — subbing out the last unlocked player completes the
+  round with no buzz.
+- **Scoring surfaces**: benched players have no +10, their number key is
+  ignored (keybinds.js), a phone buzz from them gets the silent re-arm
+  (room.js). The dev-tools custom award is deliberately not gated — it's
+  the moderator override.
+- **Display**: the shared snapshot carries `benched` per player; the
+  pop-out's jailbreak roster and player.html mute them ("(sub)"), and a
+  benched phone shows "subbed out" instead of a live button.
+- **CSV / stats**: the players section gained a 4th column, `Played` =
+  fraction of the pack's real slots (padded gaps excluded) the player was
+  on the floor for — sub out at Q51 of 100 = `0.5`. `parseResultsCsv`
+  reads a missing column as 1, so every existing CSV still loads.
+  `aggregateTournament` sums Played into `gamesPlayed` (fractional; PPG =
+  points / gamesPlayed) and counts `appearances` separately; the viewer
+  prints fractional GP and adds a Played column only on game/player views
+  where someone was actually subbed.
+
 ## Tests
 
 ```
@@ -830,6 +880,18 @@ transparent to tests. Notable test files:
                                      resolution (meta vs ?slug=, validation), API URL
                                      builders, PR classification, changed-file
                                      filtering, banner copy
+- `participation.test.js`          — substitutions, pure half: benched intervals, slot
+                                     availability, Played fraction + CSV cell round trip
+- `jailbreak.test.js`              — lockout replay incl. the sub cases (5 rostered, 1
+                                     benched → cycles after 4; bench-as-it-was-then replay)
+- `player-menu.test.js`            — the row context menu through the real panel wiring:
+                                     open/close, Sub out / Sub in, +/- points preselect,
+                                     clear-points entry, the keybind guard
+- `tournament-stats-subs.test.js`  — stats viewer with subs in the data: fractional GP,
+                                     Played column only where someone was subbed
+- `subs.e2e.mjs`                   — NOT vitest/CI: headless-Chrome drive of the whole
+                                     flow (sub out on a jailbreak → lock cycles → export →
+                                     Played column → reload) — `node tests/subs.e2e.mjs`
 - `room-logic.test.js`             — pure buzzer rules: arm-lifecycle matrix through the
                                      real reducers, name matching (+reorder survival),
                                      qlog spoiler rules

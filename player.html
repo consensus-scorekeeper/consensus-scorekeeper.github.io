@@ -86,6 +86,7 @@
     color: var(--muted); }
   .brow.me { color: var(--bright); font-weight: 700; }
   .brow.locked { opacity: 0.45; text-decoration: line-through; }
+  .brow.benched { opacity: 0.4; font-style: italic; }
 
   /* past questions */
   #pastq { padding: 0 1.2rem 1.6rem; }
@@ -258,6 +259,15 @@ function amLocked() {
   return (locked || []).includes(spot.index);
 }
 
+// Subbed out by the moderator: the host ignores our buzzes anyway, but
+// say so instead of showing a live button.
+function amBenched() {
+  const spot = mySpot();
+  if (!spot) return false;
+  const team = spot.letter === 'a' ? snapshot.teamA : snapshot.teamB;
+  return !!(team.players[spot.index] && team.players[spot.index].benched);
+}
+
 // Buzz timing is a per-player toggle: "press" fires on pointerdown (the
 // instant of finger contact — no tap-recognition delay, no press-duration
 // variance in the race; the latency-optimal default) while "release"
@@ -276,7 +286,7 @@ $('buzzmode').onclick = () => {
 renderMode();
 
 function sendBuzz() {
-  if (watch || !armed || sentBuzz || amLocked() || !ws || ws.readyState !== 1) return;
+  if (watch || !armed || sentBuzz || amLocked() || amBenched() || !ws || ws.readyState !== 1) return;
   ws.send(JSON.stringify({ t: 'buzz' }));
   // Optimistic feedback: turn red NOW — the server verdict (win, someone
   // else, or rejected) reconciles when it arrives, which can lag by a
@@ -310,6 +320,7 @@ function renderBuzz() {
   if (mineBuzz) { b.className = 'mine'; b.textContent = 'YOU BUZZED'; }
   else if (lastBuzzer) { b.className = 'other'; b.textContent = lastBuzzer + ' buzzed'; }
   else if (sentBuzz) { b.className = 'mine'; b.textContent = 'BUZZED'; }
+  else if (amBenched()) { b.className = 'locked'; b.textContent = 'subbed out'; }
   else if (amLocked()) { b.className = 'locked'; b.textContent = 'locked out'; }
   else if (armed) { b.className = ''; b.textContent = 'BUZZ'; }
   else { b.className = 'waiting'; b.textContent = '…'; }
@@ -325,8 +336,9 @@ function teamBlock(cls, team, lockedIdx) {
     <div class="bhead"><span>${esc(team.name)}</span><span>${team.score}</span></div>
     ${(team.players || []).map((p, i) => {
       const meCls = spot && spot.letter === cls && spot.index === i ? 'me' : '';
-      const lockCls = (lockedIdx || []).includes(i) ? 'locked' : '';
-      return `<div class="brow ${meCls} ${lockCls}"><span>${esc(p.name)}</span><span>${p.points}</span></div>`;
+      const lockCls = p.benched ? 'benched' : ((lockedIdx || []).includes(i) ? 'locked' : '');
+      const sub = p.benched ? ' <small>(sub)</small>' : '';
+      return `<div class="brow ${meCls} ${lockCls}"><span>${esc(p.name)}${sub}</span><span>${p.points}</span></div>`;
     }).join('')}
   </div>`;
 }

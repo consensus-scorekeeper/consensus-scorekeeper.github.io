@@ -25,6 +25,7 @@ import {
 } from '../game/room-logic.js';
 import { isGameVisible } from '../game/persistence.js';
 import { escapeHtml } from '../util/escape.js';
+import { isBenched } from '../util/participation.js';
 
 let room = null;           // connectHost handle, or null
 let wsUp = false;          // current WebSocket connectivity (for the panel)
@@ -174,6 +175,9 @@ export function handleRemoteBuzz(name) {
   if (match && isJailbreakQuestion(q)
       && state.jailbreakLocked[match.team].includes(match.playerIndex)) {
     return silentRearm(); // locked this jailbreak round — phones reopen
+  }
+  if (match && isBenched((match.team === 'a' ? state.teamA : state.teamB).players[match.playerIndex])) {
+    return silentRearm(); // subbed out — their phone can't win a question
   }
   state.room.preselect = match
     ? { joinName: name, team: match.team, playerName: match.playerName, qIndex: state.currentQuestion }

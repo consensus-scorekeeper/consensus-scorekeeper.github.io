@@ -4,7 +4,12 @@
 // per-player rows — is what tests assert against).
 
 import { csvEscape } from './escape.js';
+import { playedFraction, formatPlayed } from './participation.js';
 
+// Per-player rows carry `Played` — the fraction of the game's slots the
+// player was on the floor for (1 unless subbed out; see
+// util/participation.js). parseResultsCsv treats a missing column as 1, so
+// CSVs exported before the column existed still load.
 export function buildResultsCsv(state) {
   const winner = state.teamA.score === state.teamB.score
     ? 'Tie'
@@ -21,9 +26,10 @@ export function buildResultsCsv(state) {
   rows.push([state.teamA.name, state.teamA.score]);
   rows.push([state.teamB.name, state.teamB.score]);
   rows.push([]);
-  rows.push(['Player', 'Team', 'Points']);
-  for (const p of state.teamA.players) rows.push([p.name, state.teamA.name, p.points]);
-  for (const p of state.teamB.players) rows.push([p.name, state.teamB.name, p.points]);
+  rows.push(['Player', 'Team', 'Points', 'Played']);
+  const played = (p) => formatPlayed(playedFraction(p, state.questions));
+  for (const p of state.teamA.players) rows.push([p.name, state.teamA.name, p.points, played(p)]);
+  for (const p of state.teamB.players) rows.push([p.name, state.teamB.name, p.points, played(p)]);
   return rows.map(r => r.map(csvEscape).join(',')).join('\r\n');
 }
 

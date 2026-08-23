@@ -31,10 +31,30 @@ describe('parseResultsCsv', () => {
     expect(r.winner).toBe('Alphas');
     expect(r.exportedAt).toBe('2026-05-09T12:00:00.000Z');
     expect(r.players).toEqual([
-      { name: 'Alice', team: 'Alphas', points: 30 },
-      { name: 'Andy', team: 'Alphas', points: 10 },
-      { name: 'Bob', team: 'Bravos', points: 20 },
+      { name: 'Alice', team: 'Alphas', points: 30, played: 1 },
+      { name: 'Andy', team: 'Alphas', points: 10, played: 1 },
+      { name: 'Bob', team: 'Bravos', points: 20, played: 1 },
     ]);
+  });
+
+  it('reads the Played column when present (post-substitutions format)', () => {
+    const csv = SAMPLE_CSV
+      .replace('Player,Team,Points', 'Player,Team,Points,Played')
+      .replace('Alice,Alphas,30', 'Alice,Alphas,30,1')
+      .replace('Andy,Alphas,10', 'Andy,Alphas,10,0.5')
+      .replace('Bob,Bravos,20', 'Bob,Bravos,20,0.381');
+    const r = parseResultsCsv(csv);
+    expect(r.players.map((p) => p.played)).toEqual([1, 0.5, 0.381]);
+  });
+
+  it('treats a blank, garbage, or out-of-range Played cell as a full game / clamps it', () => {
+    const csv = SAMPLE_CSV
+      .replace('Player,Team,Points', 'Player,Team,Points,Played')
+      .replace('Alice,Alphas,30', 'Alice,Alphas,30,')
+      .replace('Andy,Alphas,10', 'Andy,Alphas,10,lots')
+      .replace('Bob,Bravos,20', 'Bob,Bravos,20,7');
+    const r = parseResultsCsv(csv);
+    expect(r.players.map((p) => p.played)).toEqual([1, 1, 1]);
   });
 
   it('round-trips a CSV produced by buildResultsCsv', () => {
@@ -51,7 +71,22 @@ describe('parseResultsCsv', () => {
     expect(parsed.scoreB).toBe(70);
     expect(parsed.winner).toBe('strangers on a chrain');
     expect(parsed.players).toHaveLength(3);
-    expect(parsed.players[0]).toEqual({ name: 'Terry Tang', team: 'strangers on a chrain', points: 90 });
+    expect(parsed.players[0]).toEqual({ name: 'Terry Tang', team: 'strangers on a chrain', points: 90, played: 1 });
+  });
+
+  it('round-trips a substitution through buildResultsCsv', () => {
+    const state = {
+      teamA: { name: 'A', players: [{ name: 'Full', points: 50 }, { name: 'Half', points: 20, subs: [{ out: 50, in: null }] }], score: 70 },
+      teamB: { name: 'B', players: [{ name: 'Late', points: 10, subs: [{ out: 0, in: 40 }] }], score: 10 },
+      packName: 'Pack 1.pdf',
+      questions: Array.from({ length: 100 }, (_, i) => ({ num: i + 1 })),
+    };
+    const parsed = parseResultsCsv(buildResultsCsv(state));
+    expect(parsed.players).toEqual([
+      { name: 'Full', team: 'A', points: 50, played: 1 },
+      { name: 'Half', team: 'A', points: 20, played: 0.5 },
+      { name: 'Late', team: 'B', points: 10, played: 0.6 },
+    ]);
   });
 
   it('handles a UTF-8 BOM and CRLF line endings', () => {

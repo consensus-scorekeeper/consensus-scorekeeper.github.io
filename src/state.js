@@ -164,6 +164,41 @@ export function addRosterPlayer(team, name) {
   return teamObj.players.length - 1;
 }
 
+// Substitutions: bench a player from the current slot onward / bring them
+// back from the current slot onward. Intervals live on the player object
+// (util/participation.js), so they ride along through drag-reorder and
+// persistence for free; unlike scoring they are not in history — the
+// inverse of a mis-click is the opposite button at the same slot, which
+// cancels the interval outright instead of leaving an empty one behind.
+export function subOut(team, playerIndex) {
+  const teamObj = team === 'a' ? state.teamA : state.teamB;
+  const p = teamObj.players[playerIndex];
+  if (!p) return;
+  if (!Array.isArray(p.subs)) p.subs = [];
+  const last = p.subs[p.subs.length - 1];
+  if (last && last.in == null) return; // already out
+  const slot = state.currentQuestion;
+  // Subbing back out at (or before) the slot they just came in on: reopen
+  // that interval rather than stacking an overlapping one.
+  if (last && slot <= last.in) last.in = null;
+  else p.subs.push({ out: slot, in: null });
+  notify();
+}
+
+export function subIn(team, playerIndex) {
+  const teamObj = team === 'a' ? state.teamA : state.teamB;
+  const p = teamObj.players[playerIndex];
+  if (!p || !Array.isArray(p.subs)) return;
+  const last = p.subs[p.subs.length - 1];
+  if (!last || last.in != null) return; // not out
+  const slot = state.currentQuestion;
+  // Back in before missing a single slot (same slot, or the moderator
+  // navigated backwards): the sub never happened.
+  if (slot <= last.out) p.subs.pop();
+  else last.in = slot;
+  notify();
+}
+
 export function clearPlayerPoints(team, playerIndex) {
   const teamObj = team === 'a' ? state.teamA : state.teamB;
   const entryIdx = state.history.findIndex(h =>

@@ -235,6 +235,22 @@ function pct(n, d) {
   return `${((n / d) * 100).toFixed(0)}%`;
 }
 
+// Games played is fractional once substitutions are involved (a player
+// subbed out at halftime adds 0.5) — whole numbers stay whole.
+function fmtGp(n) {
+  return Number.isInteger(n) ? String(n) : String(Math.round(n * 100) / 100);
+}
+
+function fmtPlayed(f) {
+  return `${Math.round(f * 100)}%`;
+}
+
+// Only games with a substitution get a Played column — for the common
+// everyone-played-everything case it would just be a column of 100%.
+function hasSubs(rows) {
+  return rows.some((r) => (r.played ?? 1) < 1);
+}
+
 function renderStandings(agg) {
   const sRows = agg.standings.map((t) => `
     <tr class="ts-row-clickable" data-action="ts-show-team" data-team="${escapeHtml(t.name)}">
@@ -254,7 +270,7 @@ function renderStandings(agg) {
       <td>${escapeHtml(p.name)}</td>
       <td>${escapeHtml(p.team)}</td>
       <td>${p.points}</td>
-      <td>${p.gamesPlayed}</td>
+      <td>${fmtGp(p.gamesPlayed)}</td>
       <td>${p.ppg.toFixed(1)}</td>
       <td>${p.bestGame}</td>
     </tr>`).join('');
@@ -310,7 +326,7 @@ function renderTeamView(agg) {
     <tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(p.team)}" data-player="${escapeHtml(p.name)}">
       <td>${escapeHtml(p.name)}</td>
       <td>${p.points}</td>
-      <td>${p.gamesPlayed}</td>
+      <td>${fmtGp(p.gamesPlayed)}</td>
       <td>${p.ppg.toFixed(1)}</td>
       <td>${p.bestGame}</td>
     </tr>`).join('');
@@ -353,11 +369,13 @@ function renderPlayerView(agg) {
   const games = gamesForPlayer(tsState.games, playerName, teamName);
   games.sort((x, y) => String(x.exportedAt).localeCompare(String(y.exportedAt)));
 
+  const showPlayed = hasSubs(games);
   const rows = games.map((g) => `
     <tr class="ts-row-clickable ts-result-${g.result}" data-action="ts-show-game" data-game-id="${escapeHtml(g.id)}">
       <td>${escapeHtml(g.packet || '—')}</td>
       <td>${escapeHtml(g.opponent)}</td>
       <td><strong>${g.points}</strong></td>
+      ${showPlayed ? `<td>${fmtPlayed(g.played)}</td>` : ''}
       <td>${g.teamScore} – ${g.opponentScore}</td>
       <td>${g.result}</td>
     </tr>`).join('');
@@ -375,14 +393,14 @@ function renderPlayerView(agg) {
     <h3>${escapeHtml(playerName)} <span class="ts-team-meta-inline">${escapeHtml(teamName)}</span></h3>
     <div class="ts-team-meta">
       <span>Total <strong>${player.points}</strong> pts</span>
-      <span>${player.gamesPlayed} GP</span>
+      <span>${fmtGp(player.gamesPlayed)} GP</span>
       <span>PPG <strong>${player.ppg.toFixed(1)}</strong></span>
       <span>High ${high} · Low ${low}</span>
     </div>
     <div class="ts-panel">
       <h3>Per-Game Performances</h3>
       <table class="ts-table">
-        <thead><tr><th>Packet</th><th>Opponent</th><th>Pts</th><th>Team Score</th><th>Result</th></tr></thead>
+        <thead><tr><th>Packet</th><th>Opponent</th><th>Pts</th>${showPlayed ? '<th>Played</th>' : ''}<th>Team Score</th><th>Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="ts-hint">Click a row to see the full game breakdown.</div>
@@ -398,14 +416,15 @@ function renderGameView() {
   const playersOf = (team) => game.players
     .filter((p) => p.team === team)
     .sort((x, y) => y.points - x.points);
+  const showPlayed = hasSubs(game.players);
   const tableFor = (team, score) => {
     const rows = playersOf(team).map((p) =>
-      `<tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(team)}" data-player="${escapeHtml(p.name)}"><td>${escapeHtml(p.name)}</td><td>${p.points}</td></tr>`).join('');
+      `<tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(team)}" data-player="${escapeHtml(p.name)}"><td>${escapeHtml(p.name)}</td><td>${p.points}</td>${showPlayed ? `<td>${fmtPlayed(p.played ?? 1)}</td>` : ''}</tr>`).join('');
     return `
       <div class="ts-panel">
         <h3>${escapeHtml(team)} <span class="ts-team-score">${score}</span></h3>
         <table class="ts-table">
-          <thead><tr><th>Player</th><th>Points</th></tr></thead>
+          <thead><tr><th>Player</th><th>Points</th>${showPlayed ? '<th>Played</th>' : ''}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;

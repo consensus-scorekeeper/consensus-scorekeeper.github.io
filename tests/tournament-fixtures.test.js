@@ -53,8 +53,12 @@ describe('tournament-results fixtures', () => {
     describe(`tournaments/${slug}/`, () => {
       const games = loadGames(slug);
 
-      it('contains at least one CSV', () => {
-        expect(games.length).toBeGreaterThan(0);
+      // A tournament can legitimately hold zero games: the submission
+      // pipeline creates the folder with the first submission, and the
+      // removal workflow can retract every game again. The structural
+      // checks below degrade to "empty in, empty out" for those.
+      it('has a results folder with a manifest', () => {
+        expect(existsSync(path.join(TOURNAMENTS_DIR, slug, 'results', 'manifest.json'))).toBe(true);
       });
 
       it('every game parses with non-empty teams, both scores, and player rows', () => {
@@ -78,7 +82,7 @@ describe('tournament-results fixtures', () => {
       it('aggregates without error and totalGames matches the fixture count', () => {
         const agg = aggregateTournament(games);
         expect(agg.summary.totalGames).toBe(games.length);
-        expect(agg.standings.length).toBeGreaterThan(0);
+        expect(agg.standings.length > 0).toBe(games.length > 0);
         for (const team of agg.standings) {
           expect(team.gamesPlayed, team.name).toBeGreaterThan(0);
         }

@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { state } from '../src/main.js';
 import { renderGame } from '../src/ui/game.js';
-import { addPoints, undoLast } from '../src/state.js';
+import { addPoints, undoLast, subOut } from '../src/state.js';
 import { rebuildStreakGroups } from '../src/game/streaks.js';
 import {
   _setRoomForTest, handleRemoteBuzz, handlePendingBuzz, awardPreselect,
@@ -52,7 +52,7 @@ describe('syncRoom message flow', () => {
     expect(fake.types()).toContain('state');
     expect(fake.types()).toContain('arm');
     const snap = fake.last('state').snapshot;
-    expect(snap.teamA.players[0]).toEqual({ name: 'Kim Lee', points: 0 });
+    expect(snap.teamA.players[0]).toEqual({ name: 'Kim Lee', points: 0, benched: false });
   });
 
   it('does not resend arm while nothing changes, and pushes qlog only on change', () => {
@@ -191,6 +191,20 @@ describe('silent re-arm paths', () => {
     expect(fake.types()).toContain('arm');
 
     handleRemoteBuzz('Sam'); // unlocked teammate can still buzz
+    await tick();
+    expect(state.room.preselect).toMatchObject({ playerName: 'Sam' });
+  });
+
+  it('re-arms on a buzz from a subbed-out player (and lets them buzz again once back in)', async () => {
+    renderGame();
+    subOut('a', 0); // Kim Lee to the bench
+    fake.clear();
+    handleRemoteBuzz('Kim Lee');
+    expect(state.room.preselect).toBeNull();
+    expect(fake.types()).toContain('arm');
+    expect(fake.last('state').snapshot.teamA.players[0].benched).toBe(true);
+
+    handleRemoteBuzz('Sam'); // teammate still buzzes normally
     await tick();
     expect(state.room.preselect).toMatchObject({ playerName: 'Sam' });
   });

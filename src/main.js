@@ -24,6 +24,8 @@ import {
   resetStreak,
   applyCustomAward as applyCustomAwardReducer,
   reorderPlayer,
+  subOut,
+  subIn,
   undoLast,
 } from './state.js';
 import { rebuildJailbreakLocks } from './game/jailbreak.js';
@@ -431,6 +433,8 @@ export {
   submitResults,
   renderPublishBadge,
   reorderPlayer,
+  subOut,
+  subIn,
   // persistence
   saveState,
   loadState,

@@ -17,6 +17,7 @@
 
 import { state, addPoints, undoLast, clearCurrentQuestion } from '../state.js';
 import { isGameVisible } from '../game/persistence.js';
+import { isBenched } from '../util/participation.js';
 import { awardPreselect, dismissPreselect } from './room.js';
 
 export function setupKeybinds({ nextQuestion, prevQuestion }) {
@@ -75,6 +76,7 @@ export function setupKeybinds({ nextQuestion, prevQuestion }) {
       if (window.DEBUG_KEYS) console.log('[keydown] team=', team, 'playerIdx=', playerIdx, 'teamPlayers=', teamPlayers.length);
       if (playerIdx < teamPlayers.length) {
         e.preventDefault();
+        if (isBenched(teamPlayers[playerIdx])) return; // subbed out — Sub in first
         const currentQ = state.questions[state.currentQuestion];
         // Streaks: only +5. Non-streaks: only +10. Shift modifier no longer toggles.
         const points = (currentQ && currentQ.isStreak) ? 5 : 10;

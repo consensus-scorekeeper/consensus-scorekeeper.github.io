@@ -920,6 +920,66 @@ body {
   background: #eee;
   border-style: dashed;
 }
+/* Substitution: player is on the bench (state: subs interval open). Muted
+   harder than a lockout and with no scoring button — Sub in brings them
+   back from the current question. */
+.player-row.player-row-benched {
+  opacity: 0.6;
+  background: #f3f4f6;
+  border-style: dotted;
+}
+.player-row.player-row-benched .player-name { text-decoration: line-through; color: #666; }
+.player-sub-tag { background: #fde68a; color: #7c5a00; }
+/* ⋯ opens the row's context menu (same menu as right-click). Kept tiny:
+   +10 is the primary action, this is the "more" affordance. */
+.player-actions .btn.btn-row-menu {
+  background: transparent;
+  color: #888;
+  border: 1px solid transparent;
+  font-size: 1rem;
+  line-height: 1;
+  padding: 4px 6px;
+  min-width: 0;
+}
+.player-actions .btn.btn-row-menu:hover { background: #e5e7eb; color: #111; border-color: #d1d5db; }
+
+/* Player context menu (ui/player-menu.js) — one element on <body>,
+   repositioned per open. */
+.ctx-menu {
+  position: fixed;
+  z-index: 1200;
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid #cfd4da;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  font-size: 0.9rem;
+}
+.ctx-menu[hidden] { display: none; }
+.ctx-menu-title {
+  padding: 6px 10px 4px;
+  font-weight: 700;
+  color: #333;
+  border-bottom: 1px solid #eee;
+  margin-bottom: 4px;
+  white-space: nowrap;
+}
+.ctx-menu button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-radius: 5px;
+  padding: 7px 10px;
+  font: inherit;
+  color: #111;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.ctx-menu button:hover, .ctx-menu button:focus { background: #eef2ff; outline: none; }
+.ctx-menu-hint { color: #888; font-size: 0.8em; margin-left: 4px; }
 .player-lock-tag {
   font-size: 0.7rem;
   text-transform: uppercase;

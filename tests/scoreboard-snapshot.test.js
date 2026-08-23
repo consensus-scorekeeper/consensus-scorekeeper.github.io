@@ -3,7 +3,7 @@
 // both consumers rely on, and the streak no-leak rule.
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { state, addPoints } from '../src/state.js';
+import { state, addPoints, subOut, subIn } from '../src/state.js';
 import { rebuildStreakGroups } from '../src/game/streaks.js';
 import { getScoreboardSnapshot } from '../src/ui/scoreboard-popout.js';
 import { resetState, makeQ } from './helpers.js';
@@ -21,9 +21,9 @@ describe('getScoreboardSnapshot', () => {
   it('carries per-player points and team totals', () => {
     addPoints('a', 0, 10);
     const s = getScoreboardSnapshot();
-    expect(s.teamA.players).toEqual([{ name: 'Kim', points: 10 }]);
+    expect(s.teamA.players).toEqual([{ name: 'Kim', points: 10, benched: false }]);
     expect(s.teamA.score).toBe(10);
-    expect(s.teamB.players).toEqual([{ name: 'Pat', points: 0 }]);
+    expect(s.teamB.players).toEqual([{ name: 'Pat', points: 0, benched: false }]);
   });
 
   it('reports who answered the CURRENT question only', () => {
@@ -49,5 +49,14 @@ describe('getScoreboardSnapshot', () => {
     state.questions[0] = makeQ(1, { category: 'Jailbreak' });
     state.jailbreakLocked = { a: [0], b: [] };
     expect(getScoreboardSnapshot().jailbreak).toEqual({ lockedA: [0], lockedB: [] });
+  });
+});
+
+describe('getScoreboardSnapshot — substitutions', () => {
+  it('flags benched players so the popout and phones can mute them', () => {
+    subOut('a', 0);
+    expect(getScoreboardSnapshot().teamA.players[0]).toEqual({ name: 'Kim', points: 0, benched: true });
+    subIn('a', 0); // same slot → cancelled
+    expect(getScoreboardSnapshot().teamA.players[0].benched).toBe(false);
   });
 });

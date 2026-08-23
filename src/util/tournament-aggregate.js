@@ -9,13 +9,20 @@
 //
 // Pure — no DOM, no IO. Tests in tests/tournament-aggregate.test.js.
 
+import { parsePlayed } from './participation.js';
+
 function blankTeam(name) {
   return { name, wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, gamesPlayed: 0 };
 }
 
+// gamesPlayed is fractional: a player subbed out at halftime adds 0.5
+// (the CSV's Played column, 1 when absent), so PPG stays a per-full-game
+// rate. appearances counts the games they were rostered for at all.
 function blankPlayer(name, team) {
-  return { name, team, points: 0, gamesPlayed: 0, bestGame: 0 };
+  return { name, team, points: 0, gamesPlayed: 0, appearances: 0, bestGame: 0 };
 }
+
+const playedOf = (p) => parsePlayed(p.played);
 
 export function aggregateTournament(games) {
   const teams = new Map();      // teamName -> stats
@@ -50,7 +57,8 @@ export function aggregateTournament(games) {
       if (!players.has(key)) players.set(key, blankPlayer(p.name, p.team));
       const ps = players.get(key);
       ps.points += p.points;
-      ps.gamesPlayed++;
+      ps.gamesPlayed += playedOf(p);
+      ps.appearances++;
       if (p.points > ps.bestGame) ps.bestGame = p.points;
       if (bestPlayerGame === null || p.points > bestPlayerGame.points) {
         bestPlayerGame = { id, name: p.name, team: p.team, points: p.points };
@@ -107,8 +115,9 @@ export function gamesForTeam(games, teamName) {
 }
 
 // Filter games to those where `playerName` on `teamName` appeared, augmented
-// with `points` (this player's contribution that game), `opponent`, the team
-// scores, and the team result. Drives the per-player drill-down view.
+// with `points` (this player's contribution that game), `played` (fraction
+// of the game they were on the floor for), `opponent`, the team scores, and
+// the team result. Drives the per-player drill-down view.
 export function gamesForPlayer(games, playerName, teamName) {
   const out = [];
   for (const g of games) {
@@ -118,7 +127,7 @@ export function gamesForPlayer(games, playerName, teamName) {
     const opponent = g.teamA === teamName ? g.teamB : g.teamA;
     const opponentScore = g.teamA === teamName ? g.scoreB : g.scoreA;
     const result = teamScore > opponentScore ? 'W' : teamScore < opponentScore ? 'L' : 'T';
-    out.push({ ...g, points: player.points, opponent, teamScore, opponentScore, result });
+    out.push({ ...g, points: player.points, played: playedOf(player), opponent, teamScore, opponentScore, result });
   }
   return out;
 }
