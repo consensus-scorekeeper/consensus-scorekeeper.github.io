@@ -141,6 +141,30 @@ export const TOURNAMENTS = [
       }
     ]
   },
+  {
+    "name": "Coprolite 2026",
+    "slug": "coprolite-2026",
+    "rosters": [
+      {
+        "name": "crusty crustacean asians",
+        "players": [
+          "Chauncey Lo",
+          "Hazel Singh",
+          "Brandon Weiss",
+          "Isaac Mammel"
+        ]
+      },
+      {
+        "name": "From the Delaware River to the sea, Central Jersey will be free",
+        "players": [
+          "Brian Lu",
+          "Aum Mundhe",
+          "Nick Pruitt",
+          "Paul Cantave"
+        ]
+      }
+    ]
+  },
 ];
 
 export function getTournamentBySlug(slug) {
