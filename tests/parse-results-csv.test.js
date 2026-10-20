@@ -31,9 +31,9 @@ describe('parseResultsCsv', () => {
     expect(r.winner).toBe('Alphas');
     expect(r.exportedAt).toBe('2026-05-09T12:00:00.000Z');
     expect(r.players).toEqual([
-      { name: 'Alice', team: 'Alphas', points: 30, played: 1 },
-      { name: 'Andy', team: 'Alphas', points: 10, played: 1 },
-      { name: 'Bob', team: 'Bravos', points: 20, played: 1 },
+      { name: 'Alice', team: 'Alphas', points: 30, played: 1, buzzCorrect: null, buzzWrong: null },
+      { name: 'Andy', team: 'Alphas', points: 10, played: 1, buzzCorrect: null, buzzWrong: null },
+      { name: 'Bob', team: 'Bravos', points: 20, played: 1, buzzCorrect: null, buzzWrong: null },
     ]);
   });
 
@@ -71,7 +71,7 @@ describe('parseResultsCsv', () => {
     expect(parsed.scoreB).toBe(70);
     expect(parsed.winner).toBe('strangers on a chrain');
     expect(parsed.players).toHaveLength(3);
-    expect(parsed.players[0]).toEqual({ name: 'Terry Tang', team: 'strangers on a chrain', points: 90, played: 1 });
+    expect(parsed.players[0]).toEqual({ name: 'Terry Tang', team: 'strangers on a chrain', points: 90, played: 1, buzzCorrect: null, buzzWrong: null });
   });
 
   it('round-trips a substitution through buildResultsCsv', () => {
@@ -83,9 +83,9 @@ describe('parseResultsCsv', () => {
     };
     const parsed = parseResultsCsv(buildResultsCsv(state));
     expect(parsed.players).toEqual([
-      { name: 'Full', team: 'A', points: 50, played: 1 },
-      { name: 'Half', team: 'A', points: 20, played: 0.5 },
-      { name: 'Late', team: 'B', points: 10, played: 0.6 },
+      { name: 'Full', team: 'A', points: 50, played: 1, buzzCorrect: null, buzzWrong: null },
+      { name: 'Half', team: 'A', points: 20, played: 0.5, buzzCorrect: null, buzzWrong: null },
+      { name: 'Late', team: 'B', points: 10, played: 0.6, buzzCorrect: null, buzzWrong: null },
     ]);
   });
 

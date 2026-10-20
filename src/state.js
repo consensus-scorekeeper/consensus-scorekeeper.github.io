@@ -81,6 +81,13 @@ export function hasGameInProgress() {
     || state.teamB.score !== 0;
 }
 
+// Ctrl+Z / Undo Last has something to take back: a scoring entry or a
+// wrong buzz (util/buzzes.js).
+export function canUndo() {
+  return state.history.length > 0
+    || [...state.teamA.players, ...state.teamB.players].some((p) => Array.isArray(p.wrongBuzzes) && p.wrongBuzzes.length > 0);
+}
+
 // True when the game looks finished: every slot resolved, or the
 // moderator is sitting on the final slot and has scored it. Drives the
 // one-time "Submit Results?" nudge (main.js) — a heuristic for a
@@ -143,12 +150,45 @@ export function addPoints(team, playerIndex, points) {
 
   teamObj.players[playerIndex].points += points;
   teamObj.score += points;
-  state.history.push({ team, playerIndex, points, question: state.currentQuestion });
+  const entry = { team, playerIndex, points, question: state.currentQuestion };
+  // Awarding the player whose phone buzz is up (Space, or their own +10)
+  // counts as a correct buzz — see util/buzzes.js.
+  const ps = state.room && state.room.preselect;
+  if (ps && !ps.unmatched && ps.team === team && ps.qIndex === state.currentQuestion
+      && teamObj.players[playerIndex].name === ps.playerName) {
+    entry.buzz = true;
+  }
+  state.history.push(entry);
   state.answeredQuestions.add(state.currentQuestion);
   if (state.currentQuestion < state.questions.length - 1) {
     state.currentQuestion++;
   }
   notify();
+}
+
+// A phone buzz dismissed with Esc: count it as a wrong buzz (util/buzzes.js).
+// Not in history — wrong answers score nothing and history consumers
+// treat any entry as an answer — so it lives on the player, stamped with
+// the history length for undoLast's ordering.
+export function logWrongBuzz(team, playerIndex) {
+  const teamObj = team === 'a' ? state.teamA : state.teamB;
+  const p = teamObj.players[playerIndex];
+  if (!p) return;
+  if (!Array.isArray(p.wrongBuzzes)) p.wrongBuzzes = [];
+  p.wrongBuzzes.push({ q: state.currentQuestion, after: state.history.length });
+  notify();
+}
+
+// The most recent wrong buzz logged since the last scoring entry, if any.
+function latestUndoableWrongBuzz() {
+  let best = null;
+  for (const p of [...state.teamA.players, ...state.teamB.players]) {
+    const list = p.wrongBuzzes;
+    if (!Array.isArray(list) || list.length === 0) continue;
+    const w = list[list.length - 1];
+    if (w.after >= state.history.length && (!best || w.after >= best.w.after)) best = { p, w };
+  }
+  return best;
 }
 
 // Add a player to a team mid-game. Used by the buzzer rooms: remote
@@ -318,6 +358,14 @@ export function reorderPlayer(team, fromIndex, toIndex) {
 }
 
 export function undoLast() {
+  // A wrong buzz logged after the last scoring entry is the newest action.
+  const wrong = latestUndoableWrongBuzz();
+  if (wrong) {
+    wrong.p.wrongBuzzes.pop();
+    state.currentQuestion = wrong.w.q;
+    notify();
+    return;
+  }
   if (state.history.length === 0) return;
   const last = state.history.pop();
   const teamObj = last.team === 'a' ? state.teamA : state.teamB;

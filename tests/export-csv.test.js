@@ -68,10 +68,10 @@ describe('exportCsv', () => {
     expect(lines[10]).toBe('');
 
     // Section 3: per-player rows
-    expect(lines[11]).toBe('Player,Team,Points,Played');
-    expect(lines[12]).toBe('Alice,Alphas,30,1');
-    expect(lines[13]).toBe('Andy,Alphas,10,1');
-    expect(lines[14]).toBe('Bob,Bravos,20,1');
+    expect(lines[11]).toBe('Player,Team,Points,Played,Correct,Wrong');
+    expect(lines[12]).toBe('Alice,Alphas,30,1,,');
+    expect(lines[13]).toBe('Andy,Alphas,10,1,,');
+    expect(lines[14]).toBe('Bob,Bravos,20,1,,');
   });
 
   it('writes each player\'s Played fraction from their sub intervals', async () => {
@@ -89,10 +89,10 @@ describe('exportCsv', () => {
 
     const csv = await captureExportedCsv();
     const lines = csv.split('\r\n');
-    expect(lines[12]).toBe('Alice,Alphas,30,1');
-    expect(lines[13]).toBe('Andy,Alphas,10,0.5');
-    expect(lines[14]).toBe('Ava,Alphas,0,0.25');
-    expect(lines[15]).toBe('Bob,Bravos,20,1');
+    expect(lines[12]).toBe('Alice,Alphas,30,1,,');
+    expect(lines[13]).toBe('Andy,Alphas,10,0.5,,');
+    expect(lines[14]).toBe('Ava,Alphas,0,0.25,,');
+    expect(lines[15]).toBe('Bob,Bravos,20,1,,');
   });
 
   it('records "Tie" when scores are equal', async () => {

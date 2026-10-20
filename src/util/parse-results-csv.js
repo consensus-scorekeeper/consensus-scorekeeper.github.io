@@ -6,11 +6,14 @@
 //   3. per-player rows: header "Player,Team,Points,Played" then one row per
 //      player. `Played` (fraction of the game's slots the player was on the
 //      floor for, 0–1) arrived with substitutions; older CSVs have a
-//      3-column section and parse as Played = 1.
+//      3-column section and parse as Played = 1. `Correct` / `Wrong`
+//      (phone-buzzer counts, util/buzzes.js) came later still; blank or
+//      missing parses as null = untracked.
 //
 // Pure — no DOM, no IO. Tests live in tests/parse-results-csv.test.js.
 
 import { parsePlayed } from './participation.js';
+import { parseBuzzCell } from './buzzes.js';
 
 export function splitCsvLine(line) {
   // RFC 4180-ish split: respect double-quoted fields and "" escapes.
@@ -64,7 +67,13 @@ export function parseResultsCsv(text) {
     } else if (section === 'team-score') {
       teamScores.push({ name: row[0], score: parseInt(row[1], 10) || 0 });
     } else if (section === 'players') {
-      players.push({ name: row[0], team: row[1], points: parseInt(row[2], 10) || 0, played: parsePlayed(row[3]) });
+      const correct = parseBuzzCell(row[4]);
+      const wrong = parseBuzzCell(row[5]);
+      const tracked = correct !== null && wrong !== null;
+      players.push({
+        name: row[0], team: row[1], points: parseInt(row[2], 10) || 0, played: parsePlayed(row[3]),
+        buzzCorrect: tracked ? correct : null, buzzWrong: tracked ? wrong : null,
+      });
     }
   }
 

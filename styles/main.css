@@ -1014,6 +1014,11 @@ body {
   text-align: right;
   color: #555;
 }
+.player-buzzes {
+  font-size: 0.8rem;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
 .player-actions {
   display: flex;
   gap: 4px;

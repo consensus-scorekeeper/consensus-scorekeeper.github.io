@@ -167,6 +167,9 @@ src/
                           isBenchedAt / playedFraction (share of the pack's real slots
                           the player was on the floor for) + the CSV Played cell
                           (formatPlayed / parsePlayed — blank = 1, so old CSVs load)
+    buzzes.js           ← correct-buzz percentage, pure: buzzCounts (tagged history
+                          entries + player.wrongBuzzes), MIN_BUZZES_FOR_PCT, the CSV
+                          Correct/Wrong cells (blank = untracked)
     submit-results.js   ← submitResultsUrl: URL of the GitHub submit-results issue
                           form (slug prefilled when given); rendered as links by
                           ui/submission-links.js
@@ -784,6 +787,19 @@ in the scoreboard.
   (`lastSentArmed = null`) and resync.
 - `state.room` is transient (saveState's whitelist skips it): reloading
   the page leaves the room.
+- **Correct-buzz % (buzzer games only, `util/buzzes.js`).** Esc now means
+  "wrong": `dismissPreselect` calls `logWrongBuzz`, which pushes
+  `{ q, after: history.length }` onto `player.wrongBuzzes` (not history —
+  history consumers treat any entry as an answer). `addPoints` tags its
+  entry `buzz: true` when it awards the matched preselect's player (Space
+  or their +10), so undo/clear/re-award drop correct buzzes for free.
+  `undoLast` pops a wrong buzz first when its `after` ≥ history length
+  (it's newer than the last score); `canUndo()` drives the Undo button.
+  Streaks (Esc there still "dismisses") and unmatched buzzes aren't
+  counted. Rows show `correct/total` once a player has a buzz; the CSV
+  gains `Correct`,`Wrong` (blank when none); the stats viewer adds Buzz %
+  (≥ 10 buzzes, counts on hover) / per-game `Buzzes` columns only when
+  the data has any.
 
 ## Substitutions (Sub out / Sub in)
 
@@ -831,7 +847,8 @@ with one player sitting out stayed locked forever.
 
 ```
 npm install         # one-time: installs vitest + happy-dom
-npm test            # runs all tests once
+npm test            # runs all tests once (Node 25+: NODE_OPTIONS=--no-experimental-webstorage,
+                    # or Node's own empty localStorage global shadows happy-dom's)
 npm run test:watch  # watch mode
 ```
 
@@ -880,6 +897,9 @@ transparent to tests. Notable test files:
                                      resolution (meta vs ?slug=, validation), API URL
                                      builders, PR classification, changed-file
                                      filtering, banner copy
+- `buzzes.test.js`                 — correct-buzz %: Space/+10/Esc verdicts through the real
+                                     room host, streak + unmatched exclusions, undo ordering,
+                                     reorder, CSV round trip, aggregate, viewer columns
 - `participation.test.js`          — substitutions, pure half: benched intervals, slot
                                      availability, Played fraction + CSV cell round trip
 - `jailbreak.test.js`              — lockout replay incl. the sub cases (5 rostered, 1

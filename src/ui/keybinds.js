@@ -10,7 +10,8 @@
 // - Ctrl+Z: undo last scoring action.
 // - C: clear the current question's points.
 // - Space / Enter: award the phone-buzz preselect (+10 / +5 streak);
-//   Esc: dismiss it and re-open the buzzers. No-ops without a preselect.
+//   Esc: count it as a wrong buzz and re-open the buzzers. No-ops without
+//   a preselect.
 //
 // PDF overlay short-circuits this — its own listener (in ui/pdf-viewer.js)
 // owns Esc / arrows while the overlay is open.

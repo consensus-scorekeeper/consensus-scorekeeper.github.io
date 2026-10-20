@@ -11,12 +11,12 @@
 // or disarm the phones' buzz buttons, and push a spoiler-safe
 // past-questions log. A winning remote buzz PRESELECTS the matched
 // roster player — the moderator stays the verdict authority (Space
-// awards, Esc dismisses); nothing is ever auto-scored.
+// awards, Esc marks it wrong); nothing is ever auto-scored.
 //
 // The room client (src/vendor/room.js) is vendored byte-identical from
 // ../qb-scorekeeper/app/room.js — never edit it here.
 
-import { state, addPoints, addRosterPlayer } from '../state.js';
+import { state, addPoints, addRosterPlayer, logWrongBuzz } from '../state.js';
 import { createRoom, connectHost } from '../vendor/room.js';
 import { getScoreboardSnapshot } from './scoreboard-popout.js';
 import {
@@ -206,13 +206,19 @@ export function awardPreselect() {
   return true;
 }
 
-// Esc keybind: wrong answer / accidental buzz — drop the preselect and
-// bounce the buzzers back open for everyone. Returns true if consumed.
+// Esc keybind: wrong answer — drop the preselect, count a wrong buzz for
+// a matched non-streak buzz (util/buzzes.js; Ctrl+Z takes back an
+// accidental one), and bounce the buzzers back open for everyone.
+// Returns true if consumed.
 export function dismissPreselect() {
-  if (!state.room.preselect) return false;
+  const ps = state.room.preselect;
+  if (!ps) return false;
+  const at = preselectIndex(ps);
+  const q = state.questions[state.currentQuestion];
   state.room.preselect = null;
   lastSentArmed = null;
-  rerender();
+  if (at && !(q && q.isStreak)) logWrongBuzz(at.team, at.playerIndex);
+  else rerender();
   return true;
 }
 
@@ -323,7 +329,9 @@ function renderRoomUI() {
       const pts = q && q.isStreak ? 5 : 10;
       const teamObj = ps.team === 'a' ? state.teamA : state.teamB;
       bar.className = 'room-buzz-bar';
-      bar.innerHTML = `&#128276; <strong>${escapeHtml(ps.playerName)}</strong> (${escapeHtml(teamObj.name)}) buzzed &mdash; Space awards +${pts} &middot; Esc dismisses`;
+      // Esc on a streak isn't counted (util/buzzes.js), so it keeps its old name.
+      const esc = q && q.isStreak ? 'Esc dismisses' : 'Esc wrong';
+      bar.innerHTML = `&#128276; <strong>${escapeHtml(ps.playerName)}</strong> (${escapeHtml(teamObj.name)}) buzzed &mdash; Space awards +${pts} &middot; ${esc}`;
       bar.style.display = 'block';
     }
   }

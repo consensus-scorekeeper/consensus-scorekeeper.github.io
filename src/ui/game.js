@@ -4,12 +4,13 @@
 // padQuestionsToSlots + start/back live here too because they're tightly
 // coupled to the game lifecycle.
 
-import { state, subscribe } from '../state.js';
+import { state, subscribe, canUndo } from '../state.js';
 import { escapeHtml } from '../util/escape.js';
 import { issueSlotSet } from '../parser/diagnostics.js';
 import { rebuildJailbreakLocks } from '../game/jailbreak.js';
 import { getInitials, getAnsweredBy } from '../game/categories.js';
 import { isBenched } from '../util/participation.js';
+import { buzzCounts } from '../util/buzzes.js';
 import { saveState } from '../game/persistence.js';
 import { syncInlinePdfToQuestion } from './pdf-viewer.js';
 import { pushScoreboardUpdate } from './scoreboard-popout.js';
@@ -48,8 +49,8 @@ export function startGame() {
   }
   state.teamA.score = 0;
   state.teamB.score = 0;
-  state.teamA.players.forEach(p => { p.points = 0; p.subs = []; });
-  state.teamB.players.forEach(p => { p.points = 0; p.subs = []; });
+  state.teamA.players.forEach(p => { p.points = 0; p.subs = []; p.wrongBuzzes = []; });
+  state.teamB.players.forEach(p => { p.points = 0; p.subs = []; p.wrongBuzzes = []; });
   state.currentQuestion = 0;
   state.history = [];
   state.answeredQuestions = new Set();
@@ -99,7 +100,7 @@ export function renderGame() {
   renderQuestion();
   renderPlayerPanel('a');
   renderPlayerPanel('b');
-  document.getElementById('undo-btn').disabled = state.history.length === 0;
+  document.getElementById('undo-btn').disabled = !canUndo();
   saveState();
   pushScoreboardUpdate();
   syncRoom();  // push snapshot/arm/qlog to phone buzzers + redraw room UI
@@ -429,13 +430,19 @@ export function renderPlayerPanel(team) {
     const outSinceNum = benched ? (state.questions[outSince]?.num ?? outSince + 1) : null;
     const benchedTag = benched ? `<span class="player-lock-tag player-sub-tag" title="Subbed out — not playing">out since Q${outSinceNum}</span>` : '';
     const buzzedClass = i === buzzedIdx ? ' player-row-buzzed' : '';
+    // Phone-buzzer games only: correct/total buzzes so far (util/buzzes.js).
+    const bc = buzzCounts(state.history, team, i, p);
+    const buzzTotal = bc.correct + bc.wrong;
+    const buzzTag = buzzTotal > 0
+      ? `<span class="player-buzzes" title="${bc.correct} of ${buzzTotal} buzzes correct">${bc.correct}/${buzzTotal}</span>`
+      : '';
     const assignClass = assignMode ? ' player-row-assignable' : '';
     return `<div class="player-row${lockedClass}${benchedClass}${buzzedClass}${assignClass}" draggable="true" data-team="${team}" data-index="${i}">
       <span class="drag-handle" aria-hidden="true" title="Drag to reorder">&#x2630;</span>
       ${keybind !== null ? `<span class="player-keybind">${keybind}</span>` : ''}
       <span class="player-name">${escapeHtml(p.name)}</span>
       ${lockedTag}${benchedTag}
-      <span class="player-points">${p.points}</span>
+      ${buzzTag}<span class="player-points">${p.points}</span>
       <div class="player-actions">
         ${scoreBtn}${menuBtn}
       </div>
