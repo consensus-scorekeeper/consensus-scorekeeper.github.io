@@ -19,7 +19,6 @@
 import { parseResultsCsv } from '../util/parse-results-csv.js';
 import { aggregateTournament, gamesForTeam, gamesForPlayer } from '../util/tournament-aggregate.js';
 import { escapeHtml } from '../util/escape.js';
-import { buzzPct, MIN_BUZZES_FOR_PCT } from '../util/buzzes.js';
 import {
   pullsForIssueUrl,
   classifyPull,
@@ -252,27 +251,7 @@ function hasSubs(rows) {
   return rows.some((r) => (r.played ?? 1) < 1);
 }
 
-// Correct-buzz percentage (phone-buzzer games only, util/buzzes.js).
-// Totals: a percentage once there are enough buzzes, counts on hover.
-function fmtBuzzPct(correct, wrong) {
-  const total = correct + wrong;
-  const title = total ? ` title="${correct} of ${total} buzzes correct"` : '';
-  if (total < MIN_BUZZES_FOR_PCT) return `<span${title}>—</span>`;
-  return `<span${title}>${(buzzPct(correct, wrong) * 100).toFixed(0)}%</span>`;
-}
-
-// One game: plain counts, since a single game rarely reaches the minimum.
-function fmtBuzzGame(correct, wrong) {
-  if (correct == null || wrong == null) return '—';
-  return `${correct}/${correct + wrong}`;
-}
-
-function hasBuzzRows(rows) {
-  return rows.some((r) => r.buzzCorrect != null && r.buzzWrong != null);
-}
-
 function renderStandings(agg) {
-  const showBuzz = agg.hasBuzzData;
   const sRows = agg.standings.map((t) => `
     <tr class="ts-row-clickable" data-action="ts-show-team" data-team="${escapeHtml(t.name)}">
       <td>${escapeHtml(t.name)}</td>
@@ -283,7 +262,6 @@ function renderStandings(agg) {
       <td>${t.pointsFor}</td>
       <td>${t.pointsAgainst}</td>
       <td>${t.pointsFor - t.pointsAgainst >= 0 ? '+' : ''}${t.pointsFor - t.pointsAgainst}</td>
-      ${showBuzz ? `<td>${fmtBuzzPct(t.buzzCorrect, t.buzzWrong)}</td>` : ''}
     </tr>`).join('');
 
   const lRows = agg.leaderboard.map((p, i) => `
@@ -294,7 +272,6 @@ function renderStandings(agg) {
       <td>${p.points}</td>
       <td>${fmtGp(p.gamesPlayed)}</td>
       <td>${p.ppg.toFixed(1)}</td>
-      ${showBuzz ? `<td>${fmtBuzzPct(p.buzzCorrect, p.buzzWrong)}</td>` : ''}
       <td>${p.bestGame}</td>
     </tr>`).join('');
 
@@ -312,7 +289,7 @@ function renderStandings(agg) {
       <div class="ts-panel">
         <h3>Team Standings</h3>
         <table class="ts-table">
-          <thead><tr><th>Team</th><th>W</th><th>L</th><th>T</th><th>%</th><th>PF</th><th>PA</th><th>±</th>${showBuzz ? '<th>Buzz %</th>' : ''}</tr></thead>
+          <thead><tr><th>Team</th><th>W</th><th>L</th><th>T</th><th>%</th><th>PF</th><th>PA</th><th>±</th></tr></thead>
           <tbody>${sRows}</tbody>
         </table>
         <div class="ts-hint">Click a team to see their games.</div>
@@ -320,7 +297,7 @@ function renderStandings(agg) {
       <div class="ts-panel">
         <h3>Individual Leaderboard</h3>
         <table class="ts-table">
-          <thead><tr><th>#</th><th>Player</th><th>Team</th><th>Pts</th><th>GP</th><th>PPG</th>${showBuzz ? '<th>Buzz %</th>' : ''}<th>Best</th></tr></thead>
+          <thead><tr><th>#</th><th>Player</th><th>Team</th><th>Pts</th><th>GP</th><th>PPG</th><th>Best</th></tr></thead>
           <tbody>${lRows}</tbody>
         </table>
         <div class="ts-hint">Click a player to see their per-game performances.</div>
@@ -344,7 +321,6 @@ function renderTeamView(agg) {
       <td>${g.result}</td>
     </tr>`).join('');
 
-  const showBuzz = agg.hasBuzzData;
   const teamPlayers = agg.leaderboard.filter((p) => p.team === teamName);
   const playerRows = teamPlayers.map((p) => `
     <tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(p.team)}" data-player="${escapeHtml(p.name)}">
@@ -352,7 +328,6 @@ function renderTeamView(agg) {
       <td>${p.points}</td>
       <td>${fmtGp(p.gamesPlayed)}</td>
       <td>${p.ppg.toFixed(1)}</td>
-      ${showBuzz ? `<td>${fmtBuzzPct(p.buzzCorrect, p.buzzWrong)}</td>` : ''}
       <td>${p.bestGame}</td>
     </tr>`).join('');
 
@@ -364,7 +339,6 @@ function renderTeamView(agg) {
     <div class="ts-team-meta">
       <span><strong>${team.wins}</strong>W – <strong>${team.losses}</strong>L${team.ties ? ` – <strong>${team.ties}</strong>T` : ''}</span>
       <span>PF ${team.pointsFor} · PA ${team.pointsAgainst} · ± ${team.pointsFor - team.pointsAgainst >= 0 ? '+' : ''}${team.pointsFor - team.pointsAgainst}</span>
-      ${showBuzz ? `<span>Buzz % ${fmtBuzzPct(team.buzzCorrect, team.buzzWrong)}</span>` : ''}
     </div>
     <div class="ts-grid">
       <div class="ts-panel">
@@ -378,7 +352,7 @@ function renderTeamView(agg) {
       <div class="ts-panel">
         <h3>Player Totals</h3>
         <table class="ts-table">
-          <thead><tr><th>Player</th><th>Pts</th><th>GP</th><th>PPG</th>${showBuzz ? '<th>Buzz %</th>' : ''}<th>Best</th></tr></thead>
+          <thead><tr><th>Player</th><th>Pts</th><th>GP</th><th>PPG</th><th>Best</th></tr></thead>
           <tbody>${playerRows}</tbody>
         </table>
         <div class="ts-hint">Click a player to drill in.</div>
@@ -396,14 +370,12 @@ function renderPlayerView(agg) {
   games.sort((x, y) => String(x.exportedAt).localeCompare(String(y.exportedAt)));
 
   const showPlayed = hasSubs(games);
-  const showBuzz = hasBuzzRows(games);
   const rows = games.map((g) => `
     <tr class="ts-row-clickable ts-result-${g.result}" data-action="ts-show-game" data-game-id="${escapeHtml(g.id)}">
       <td>${escapeHtml(g.packet || '—')}</td>
       <td>${escapeHtml(g.opponent)}</td>
       <td><strong>${g.points}</strong></td>
       ${showPlayed ? `<td>${fmtPlayed(g.played)}</td>` : ''}
-      ${showBuzz ? `<td>${fmtBuzzGame(g.buzzCorrect, g.buzzWrong)}</td>` : ''}
       <td>${g.teamScore} – ${g.opponentScore}</td>
       <td>${g.result}</td>
     </tr>`).join('');
@@ -424,12 +396,11 @@ function renderPlayerView(agg) {
       <span>${fmtGp(player.gamesPlayed)} GP</span>
       <span>PPG <strong>${player.ppg.toFixed(1)}</strong></span>
       <span>High ${high} · Low ${low}</span>
-      ${showBuzz ? `<span>Buzz % ${fmtBuzzPct(player.buzzCorrect, player.buzzWrong)}</span>` : ''}
     </div>
     <div class="ts-panel">
       <h3>Per-Game Performances</h3>
       <table class="ts-table">
-        <thead><tr><th>Packet</th><th>Opponent</th><th>Pts</th>${showPlayed ? '<th>Played</th>' : ''}${showBuzz ? '<th>Buzzes</th>' : ''}<th>Team Score</th><th>Result</th></tr></thead>
+        <thead><tr><th>Packet</th><th>Opponent</th><th>Pts</th>${showPlayed ? '<th>Played</th>' : ''}<th>Team Score</th><th>Result</th></tr></thead>
         <tbody>${rows}</tbody>
       </table>
       <div class="ts-hint">Click a row to see the full game breakdown.</div>
@@ -446,15 +417,14 @@ function renderGameView() {
     .filter((p) => p.team === team)
     .sort((x, y) => y.points - x.points);
   const showPlayed = hasSubs(game.players);
-  const showBuzz = hasBuzzRows(game.players);
   const tableFor = (team, score) => {
     const rows = playersOf(team).map((p) =>
-      `<tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(team)}" data-player="${escapeHtml(p.name)}"><td>${escapeHtml(p.name)}</td><td>${p.points}</td>${showPlayed ? `<td>${fmtPlayed(p.played ?? 1)}</td>` : ''}${showBuzz ? `<td>${fmtBuzzGame(p.buzzCorrect, p.buzzWrong)}</td>` : ''}</tr>`).join('');
+      `<tr class="ts-row-clickable" data-action="ts-show-player" data-team="${escapeHtml(team)}" data-player="${escapeHtml(p.name)}"><td>${escapeHtml(p.name)}</td><td>${p.points}</td>${showPlayed ? `<td>${fmtPlayed(p.played ?? 1)}</td>` : ''}</tr>`).join('');
     return `
       <div class="ts-panel">
         <h3>${escapeHtml(team)} <span class="ts-team-score">${score}</span></h3>
         <table class="ts-table">
-          <thead><tr><th>Player</th><th>Points</th>${showPlayed ? '<th>Played</th>' : ''}${showBuzz ? '<th>Buzzes</th>' : ''}</tr></thead>
+          <thead><tr><th>Player</th><th>Points</th>${showPlayed ? '<th>Played</th>' : ''}</tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>`;

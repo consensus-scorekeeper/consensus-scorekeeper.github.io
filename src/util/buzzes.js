@@ -1,4 +1,5 @@
-// Correct-buzz percentage. Only phone-buzzer games are tracked: there,
+// Correct-buzz counts, shown on the scorekeeper's player rows and written
+// to the CSV export. Only phone-buzzer games are tracked: there,
 // each buzz ends with the moderator awarding it (Space, or that player's
 // +10 while their buzz is up) or dismissing it with Esc.
 //
@@ -26,25 +27,9 @@ export function buzzCounts(history, team, playerIndex, player) {
   return { correct, wrong: wrongBuzzList(player).length };
 }
 
-// Percentages are hidden below this many buzzes so one lucky buzz
-// doesn't top the table.
-export const MIN_BUZZES_FOR_PCT = 10;
-
-export function buzzPct(correct, wrong) {
-  const total = correct + wrong;
-  return total > 0 ? correct / total : null;
-}
-
 // CSV cells: blank when the player had no buzzes (game without buzzers,
-// or a player scored with number keys), so "untracked" survives the
-// round trip instead of reading as 0 of 0.
+// or a player scored with number keys), so "untracked" never reads as
+// 0 of 0.
 export function formatBuzzCells({ correct, wrong }) {
   return correct + wrong > 0 ? [correct, wrong] : ['', ''];
-}
-
-export function parseBuzzCell(cell) {
-  const s = String(cell ?? '').trim();
-  if (s === '') return null;
-  const n = parseInt(s, 10);
-  return Number.isFinite(n) && n >= 0 ? n : null;
 }

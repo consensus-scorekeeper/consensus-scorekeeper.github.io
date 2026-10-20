@@ -12,16 +12,14 @@
 import { parsePlayed } from './participation.js';
 
 function blankTeam(name) {
-  return { name, wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, gamesPlayed: 0, buzzCorrect: 0, buzzWrong: 0 };
+  return { name, wins: 0, losses: 0, ties: 0, pointsFor: 0, pointsAgainst: 0, gamesPlayed: 0 };
 }
 
 // gamesPlayed is fractional: a player subbed out at halftime adds 0.5
 // (the CSV's Played column, 1 when absent), so PPG stays a per-full-game
 // rate. appearances counts the games they were rostered for at all.
-// buzzCorrect / buzzWrong sum the phone-buzzer counts from games that
-// tracked them (util/buzzes.js); untracked games add nothing.
 function blankPlayer(name, team) {
-  return { name, team, points: 0, gamesPlayed: 0, appearances: 0, bestGame: 0, buzzCorrect: 0, buzzWrong: 0 };
+  return { name, team, points: 0, gamesPlayed: 0, appearances: 0, bestGame: 0 };
 }
 
 const playedOf = (p) => parsePlayed(p.played);
@@ -61,12 +59,6 @@ export function aggregateTournament(games) {
       ps.points += p.points;
       ps.gamesPlayed += playedOf(p);
       ps.appearances++;
-      if (p.buzzCorrect != null && p.buzzWrong != null) {
-        ps.buzzCorrect += p.buzzCorrect;
-        ps.buzzWrong += p.buzzWrong;
-        const t = teams.get(p.team);
-        if (t) { t.buzzCorrect += p.buzzCorrect; t.buzzWrong += p.buzzWrong; }
-      }
       if (p.points > ps.bestGame) ps.bestGame = p.points;
       if (bestPlayerGame === null || p.points > bestPlayerGame.points) {
         bestPlayerGame = { id, name: p.name, team: p.team, points: p.points };
@@ -95,14 +87,10 @@ export function aggregateTournament(games) {
     return x.name.localeCompare(y.name);
   });
 
-  // Any buzz data at all? The viewer adds its Buzz % columns only then.
-  const hasBuzzData = leaderboard.some((p) => p.buzzCorrect + p.buzzWrong > 0);
-
   return {
     standings,
     leaderboard,
     games,
-    hasBuzzData,
     summary: {
       totalGames: games.length,
       closestGame,
@@ -139,11 +127,7 @@ export function gamesForPlayer(games, playerName, teamName) {
     const opponent = g.teamA === teamName ? g.teamB : g.teamA;
     const opponentScore = g.teamA === teamName ? g.scoreB : g.scoreA;
     const result = teamScore > opponentScore ? 'W' : teamScore < opponentScore ? 'L' : 'T';
-    out.push({
-      ...g, points: player.points, played: playedOf(player),
-      buzzCorrect: player.buzzCorrect ?? null, buzzWrong: player.buzzWrong ?? null,
-      opponent, teamScore, opponentScore, result,
-    });
+    out.push({ ...g, points: player.points, played: playedOf(player), opponent, teamScore, opponentScore, result });
   }
   return out;
 }
